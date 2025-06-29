@@ -66,7 +66,14 @@ class UIController {
             btnBackToQR.addEventListener('click', () => {
                 this.stopScanning();
                 this.hideElement('scanContainer');
-                this.showElement('qrContainer');
+                // 根據身份決定返回路徑
+                if (this.transport.isHostPlayer()) {
+                    // 房主：返回QR碼區域
+                    this.showElement('qrContainer');
+                } else {
+                    // 加入者：返回主選單
+                    this.showElement('mainMenu');
+                }
             });
         }
 
@@ -113,9 +120,25 @@ class UIController {
                 }
             });
         }
+
+        // 掃描按鈕（僅房主可見）
+        const btnScan = document.getElementById('btnScan');
+        if (btnScan) {
+            btnScan.addEventListener('click', () => {
+                this.hideElement('qrContainer');
+                this.showElement('scanContainer');
+                this.startScanning();
+            });
+        }
     }
 
     setupQRCode() {
+        const qrElement = document.getElementById('qr');
+        if (!qrElement) {
+            console.error('QR碼元素不存在，無法初始化QRCode');
+            return;
+        }
+        
         this.qrcode = new QRCode("qr", {
             width: 240,
             height: 240,
@@ -207,9 +230,22 @@ class UIController {
                     console.log('當前連接狀態:', this.hostPeer.connectionState);
                     
                     const compressed = LZString.compressToBase64(JSON.stringify(data));
-                    this.qrcode.makeCode(compressed);
-                    document.getElementById('qrText').textContent = compressed;
-                    document.getElementById('qrTitle').textContent = '請讓其他玩家掃描此QR碼加入';
+                    
+                    // 檢查QRCode是否可用
+                    if (this.qrcode) {
+                        this.qrcode.makeCode(compressed);
+                    }
+                    
+                    // 檢查QR碼文字元素是否存在
+                    const qrTextElement = document.getElementById('qrText');
+                    if (qrTextElement) {
+                        qrTextElement.textContent = compressed;
+                    }
+                    
+                    const qrTitleElement = document.getElementById('qrTitle');
+                    if (qrTitleElement) {
+                        qrTitleElement.textContent = '請讓其他玩家掃描此QR碼加入';
+                    }
                     
                     // 保存offer信號，供後續使用
                     this.hostOfferSignal = data;
@@ -238,24 +274,39 @@ class UIController {
         }
     }
 
-    // 房主掃描功能
+    // 房主掃描功能 - 顯示QR碼區域
     async startHostScanning() {
-        console.log('房主開始掃描');
+        console.log('房主開始掃描流程');
         this.hideElement('roomArea');
         this.showElement('qrContainer');
-        document.getElementById('qrTitle').textContent = '請讓其他玩家掃描此QR碼加入';
         
-        // 重新綁定重試按鈕
-        document.getElementById('retryScan').addEventListener('click', () => {
-            console.log('房主點擊重新掃描按鈕');
-            this.startScanning();
-        });
-
-        // 清空手動輸入欄位
-        const manualQrInput = document.getElementById('manualQrInput');
-        if (manualQrInput) manualQrInput.value = '';
-
-        await this.startScanning();
+        // 配置QR碼區域的按鈕
+        const btnBackToRoom = document.getElementById('btnBackToRoom');
+        const btnScan = document.getElementById('btnScan');
+        const qrTitle = document.getElementById('qrTitle');
+        
+        if (btnBackToRoom) btnBackToRoom.style.display = 'inline-block';
+        if (btnScan) btnScan.style.display = 'inline-block';
+        if (qrTitle) qrTitle.textContent = '請其他玩家掃描此QR碼加入遊戲';
+        
+        // 生成新的offer信號
+        if (this.hostPeer) {
+            this.hostPeer.on('signal', (data) => {
+                if (data.type === 'offer') {
+                    console.log('房主生成新的offer信號');
+                    const compressed = LZString.compressToBase64(JSON.stringify(data));
+                    
+                    if (this.qrcode) {
+                        this.qrcode.makeCode(compressed);
+                    }
+                    
+                    const qrTextElement = document.getElementById('qrText');
+                    if (qrTextElement) {
+                        qrTextElement.textContent = compressed;
+                    }
+                }
+            });
+        }
     }
 
     // 加入房間
@@ -264,16 +315,11 @@ class UIController {
         try {
             this.hideElement('mainMenu');
             this.showElement('scanContainer');
-            // 隱藏返回按鈕（加入者不需要）
-            document.getElementById('btnBackToQR').style.display = 'none';
-            // 重新綁定重試按鈕
-            document.getElementById('retryScan').addEventListener('click', () => {
-                console.log('用戶點擊重新掃描按鈕');
-                this.startScanning();
-            });
+            
             // 清空手動輸入欄位
             const manualQrInput = document.getElementById('manualQrInput');
             if (manualQrInput) manualQrInput.value = '';
+            
             console.log('開始掃描流程');
             await this.startScanning();
         } catch (error) {
@@ -362,6 +408,7 @@ class UIController {
         const resultElement = document.getElementById('scanResult');
         const videoElement = document.getElementById('scan');
         const retryButton = document.getElementById('retryScan');
+        const btnBackToQR = document.getElementById('btnBackToQR');
         const scanIndicator = document.getElementById('scanIndicator');
         const feedbackText = document.getElementById('feedbackText');
         const scanProgress = document.getElementById('scanProgress');
@@ -371,6 +418,28 @@ class UIController {
         errorElement.innerHTML = '';
         resultElement.innerHTML = '';
         retryButton.style.display = 'none';
+        btnBackToQR.style.display = 'none';
+        
+        // 配置按鈕顯示
+        if (this.transport.isHostPlayer()) {
+            // 房主模式：顯示重新掃描和返回按鈕
+            retryButton.style.display = 'inline-block';
+            btnBackToQR.style.display = 'inline-block';
+            btnBackToQR.textContent = '← 返回QR碼';
+            statusElement.textContent = '房主掃描模式 - 請掃描玩家的連接QR碼';
+        } else {
+            // 加入者模式：顯示重新掃描和返回按鈕
+            retryButton.style.display = 'inline-block';
+            btnBackToQR.style.display = 'inline-block';
+            btnBackToQR.textContent = '← 返回主選單';
+            statusElement.textContent = '請掃描房主的QR碼加入遊戲';
+        }
+        
+        // 綁定重新掃描按鈕事件
+        retryButton.addEventListener('click', () => {
+            console.log('點擊重新掃描按鈕');
+            this.startScanning();
+        });
         
         // 初始化掃描回饋
         scanIndicator.className = 'scan-indicator';
@@ -670,6 +739,9 @@ class UIController {
         console.log('開始設置WebRTC連接');
         console.log('設置peer時的信令狀態:', peer.signalingState);
 
+        // 將peer添加到transport層
+        this.transport.addPeer(peer);
+
         peer.on('signal', (data) => {
             console.log('發送信號:', data.type || 'unknown');
             console.log('發送信號時的信令狀態:', peer.signalingState);
@@ -680,13 +752,26 @@ class UIController {
                 console.log('發送answer時的信令狀態:', peer.signalingState);
                 // 將answer編碼成QR碼顯示，讓房主掃描
                 const compressed = LZString.compressToBase64(JSON.stringify(data));
-                this.qrcode.makeCode(compressed);
-                document.getElementById('qrText').textContent = compressed;
+                
+                // 檢查QRCode是否可用
+                if (this.qrcode) {
+                    this.qrcode.makeCode(compressed);
+                }
+                
+                // 檢查QR碼文字元素是否存在
+                const qrTextElement = document.getElementById('qrText');
+                if (qrTextElement) {
+                    qrTextElement.textContent = compressed;
+                }
                 
                 // 顯示QR碼給房主掃描
                 this.hideElement('scanContainer');
                 this.showElement('qrContainer');
-                document.getElementById('qrTitle').textContent = '請讓房主掃描此QR碼完成連接';
+                
+                const qrTitleElement = document.getElementById('qrTitle');
+                if (qrTitleElement) {
+                    qrTitleElement.textContent = '請讓房主掃描此QR碼完成連接';
+                }
                 
                 this.addChatMessage('已生成連接QR碼，請讓房主掃描');
             }
@@ -698,7 +783,7 @@ class UIController {
             console.log('連接建立時的連接狀態:', peer.connectionState);
             this.addChatMessage('WebRTC連接已建立');
             
-            // 連接建立後，停止掃描並進入房間區域
+            // 連接建立後，停止掃描
             console.log('開始UI切換...');
             this.stopScanning();
             console.log('掃描已停止');
@@ -709,12 +794,17 @@ class UIController {
             this.hideElement('scanContainer');
             console.log('掃描容器已隱藏');
             
-            // 顯示房間區域而不是遊戲區域
-            this.showRoomArea();
-            console.log('房間區域已顯示');
-            
-            // 加入者通知房主已加入
-            if (!this.transport.isHostPlayer()) {
+            // 根據角色顯示不同區域
+            if (this.transport.isHostPlayer()) {
+                // 房主保持在房間區域
+                this.showRoomArea();
+                console.log('房主保持在房間區域');
+            } else {
+                // 加入者進入房間區域
+                this.showRoomArea();
+                console.log('加入者進入房間區域');
+                
+                // 加入者通知房主已加入
                 this.transport.send({
                     type: 'player_joined',
                     playerId: this.transport.getCurrentPlayerId(),
@@ -835,6 +925,11 @@ class UIController {
     // 更新玩家列表
     updatePlayerList(players) {
         const playerList = document.getElementById('playerList');
+        if (!playerList) {
+            console.warn('playerList 元素不存在，跳過更新');
+            return;
+        }
+        
         playerList.innerHTML = '';
         
         players.forEach(player => {
@@ -855,8 +950,13 @@ class UIController {
         const roleName = document.getElementById('roleName');
         const roleDescription = document.getElementById('roleDescription');
         
-        roleName.textContent = this.getRoleName(role);
-        roleDescription.textContent = this.getRoleDescription(role, isGood, gameInfo);
+        if (roleName) {
+            roleName.textContent = this.getRoleName(role);
+        }
+        
+        if (roleDescription) {
+            roleDescription.textContent = this.getRoleDescription(role, isGood, gameInfo);
+        }
         
         this.showElement('roleCard');
         this.showElement('gameArea');
@@ -894,6 +994,10 @@ class UIController {
     // 更新遊戲狀態
     updateGameState(state, data) {
         const status = document.getElementById('status');
+        if (!status) {
+            console.warn('status 元素不存在，跳過更新遊戲狀態');
+            return;
+        }
         
         switch (state) {
             case 'WAITING_FOR_PLAYERS':
@@ -953,6 +1057,11 @@ class UIController {
     // 添加聊天訊息
     addChatMessage(message) {
         const chatMessages = document.getElementById('chatMessages');
+        if (!chatMessages) {
+            console.warn('chatMessages 元素不存在，跳過添加聊天訊息');
+            return;
+        }
+        
         const messageDiv = document.createElement('div');
         messageDiv.className = 'chat-message';
         messageDiv.textContent = message;
@@ -972,6 +1081,11 @@ class UIController {
 
     showSimplePeerError() {
         const mainMenu = document.getElementById('mainMenu');
+        if (!mainMenu) {
+            console.error('mainMenu 元素不存在，無法顯示 SimplePeer 錯誤');
+            return;
+        }
+        
         const errorDiv = document.createElement('div');
         errorDiv.style.cssText = `
             background: #ff6b6b;
@@ -1005,15 +1119,24 @@ class UIController {
             this.logError('未處理的Promise拒絕', event.reason, event.reason?.stack);
         });
 
-        // 設置清除錯誤按鈕
-        document.getElementById('clearErrors').addEventListener('click', () => {
-            this.clearErrors();
-        });
+        // 設置清除錯誤按鈕（如果存在）
+        const clearErrorsBtn = document.getElementById('clearErrors');
+        if (clearErrorsBtn) {
+            clearErrorsBtn.addEventListener('click', () => {
+                this.clearErrors();
+            });
+        }
     }
 
     logError(type, message, stack = null) {
         const errorContainer = document.getElementById('errorContainer');
         const errorMessages = document.getElementById('errorMessages');
+        
+        // 如果錯誤容器不存在，只記錄到控制台
+        if (!errorContainer || !errorMessages) {
+            console.error(`[${type}] ${message}`, stack);
+            return;
+        }
         
         // 顯示錯誤容器
         errorContainer.classList.remove('hidden');
@@ -1042,8 +1165,15 @@ class UIController {
 
     clearErrors() {
         const errorMessages = document.getElementById('errorMessages');
-        errorMessages.innerHTML = '';
-        document.getElementById('errorContainer').classList.add('hidden');
+        const errorContainer = document.getElementById('errorContainer');
+        
+        if (errorMessages) {
+            errorMessages.innerHTML = '';
+        }
+        
+        if (errorContainer) {
+            errorContainer.classList.add('hidden');
+        }
     }
 
     // 顯示房間區域
@@ -1323,6 +1453,11 @@ class UIController {
     // 添加房間訊息
     addRoomMessage(message) {
         const chatMessages = document.getElementById('roomChatMessages');
+        if (!chatMessages) {
+            console.warn('roomChatMessages 元素不存在，跳過添加房間訊息');
+            return;
+        }
+        
         const messageDiv = document.createElement('div');
         messageDiv.className = 'chat-message';
         messageDiv.textContent = message;

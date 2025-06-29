@@ -145,12 +145,13 @@ h1 {
     transition: width 0.3s ease;
 }
 .status {
-    margin: 10px 0;
-    padding: 10px;
-    background: #e9ecef;
-    border-radius: 5px;
+    text-align: center;
+    margin: 20px 0;
+    padding: 15px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
     font-weight: bold;
-    color: #333;
+    color: #fff;
 }
 #scanError {
     margin: 10px 0;
@@ -178,16 +179,8 @@ h1 {
     justify-content: space-between;
     align-items: center;
 }
-.status {
-    text-align: center;
-    margin: 20px 0;
-    padding: 15px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 10px;
-    font-weight: bold;
-}
 .hidden {
-    display: none !important;
+    display: none ;
 }
 .role-card {
     background: linear-gradient(45deg, #00b894, #00cec9);
@@ -407,6 +400,10 @@ h1 {
     flex-direction: column;
 }
 
+.game-operation-area.hidden {
+    display: none !important;
+}
+
 .game-header {
     text-align: center;
     margin-bottom: 20px;
@@ -594,4 +591,28 @@ h1 {
 
 .player-row {
     grid-template-columns: 1fr 1fr 1fr 1fr;
+}
+
+/* 掃描狀態特殊樣式 */
+#scanStatus {
+    margin: 10px 0;
+    padding: 10px;
+    background: #e9ecef;
+    border-radius: 5px;
+    font-weight: bold;
+    color: #333;
+}
+
+/* 確保hidden類別能正確隱藏所有區域 */
+/* .main-menu.hidden,
+.room-area.hidden,
+.qr-container.hidden,
+.scan-container.hidden,
+.game-operation-area.hidden,
+.game-view-area.hidden {
+    display: none !important;
+}  */
+
+.game-operation-area.hidden{
+    display: none !important;
 } 

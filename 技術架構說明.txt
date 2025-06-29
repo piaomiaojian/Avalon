@@ -1,0 +1,213 @@
+阿瓦隆遊戲 - 技術架構說明
+==========================
+
+1. 整體架構
+===========
+採用三層架構設計：
+- 資料傳輸層 (Transport Layer)
+- 遊戲邏輯層 (Game Logic)
+- 使用者介面層 (UI Controller)
+
+2. 資料傳輸層 (transport.js)
+============================
+2.1 核心功能
+- WebRTC P2P連接管理
+- 訊息路由和處理
+- 連接狀態監控
+- 錯誤處理和重連
+
+2.2 主要類別
+TransportLayer：
+- peers: Map<peerId, peerInfo>
+- messageHandlers: Map<type, handler>
+- isHost: boolean
+- playerId: string
+
+2.3 核心方法
+- addPeer(peer): 添加對等連接
+- send(message): 發送訊息
+- broadcast(message): 廣播訊息
+- handleMessage(data): 處理接收訊息
+- getConnectedPlayerCount(): 獲取連接玩家數
+
+2.4 訊息類型
+- signal: WebRTC信號交換
+- player_join: 玩家加入
+- game_action: 遊戲動作
+- role_assignment: 角色分配
+- mission_vote: 任務投票
+- room_message: 房間訊息
+
+3. 遊戲邏輯層 (game.js)
+=======================
+3.1 核心功能
+- 遊戲狀態管理
+- 角色分配系統
+- 任務執行邏輯
+- 投票計票系統
+- 勝負判定
+
+3.2 主要類別
+AvalonGame：
+- gameState: string
+- players: Array<Player>
+- roles: Array<Role>
+- missionResults: Array<MissionResult>
+- currentMission: number
+
+3.3 核心方法
+- assignRoles(): 分配角色
+- startMission(): 開始任務
+- handleMissionVote(): 處理任務投票
+- processMissionResult(): 處理任務結果
+- endGame(winner): 結束遊戲
+
+3.4 遊戲狀態
+- WAITING_FOR_PLAYERS: 等待玩家
+- GAME_START: 遊戲開始
+- MISSION_SELECTION: 選擇成員
+- MISSION_VOTE: 任務投票
+- MISSION_EXECUTION: 任務執行
+- GAME_END: 遊戲結束
+
+4. 使用者介面層 (app.js)
+========================
+4.1 核心功能
+- UI狀態管理
+- 事件處理
+- QR碼生成/掃描
+- 頁面切換
+- 錯誤處理
+
+4.2 主要類別
+UIController：
+- game: AvalonGame
+- transport: TransportLayer
+- qrcode: QRCode
+- codeReader: ZXing
+- isScanning: boolean
+
+4.3 核心方法
+- createRoom(): 創建房間
+- joinRoom(): 加入房間
+- startScanning(): 開始掃描
+- setupPeer(peer): 設置對等連接
+- showRoomArea(): 顯示房間區域
+
+4.4 UI區域
+- mainMenu: 主選單
+- roomArea: 房間區域
+- qrContainer: QR碼區域
+- scanContainer: 掃描區域
+- gameOperationArea: 遊戲操作區域
+- gameViewArea: 遊戲查看區域
+
+5. 外部依賴庫
+==============
+5.1 WebRTC
+- simple-peer@9.11.1: P2P連接
+- 支援offer/answer信號交換
+- 自動ICE候選處理
+
+5.2 QR碼
+- qrcodejs@1.0.0: QR碼生成
+- 支援自定義大小和顏色
+- 錯誤修正等級L
+
+5.3 掃描器
+- @zxing/library: QR碼掃描
+- 支援多種格式
+- 相機權限處理
+
+5.4 壓縮
+- lz-string@1.5.0: 資料壓縮
+- 用於壓縮WebRTC信號
+- Base64編碼
+
+6. 通訊協議
+============
+6.1 信號交換
+```json
+{
+  "type": "offer",
+  "sdp": "v=0\r\no=- 1234567890 2 IN IP4 127.0.0.1\r\n..."
+}
+```
+
+6.2 遊戲訊息
+```json
+{
+  "type": "game_action",
+  "action": "start_game",
+  "playerId": "player_abc123"
+}
+```
+
+6.3 角色分配
+```json
+{
+  "type": "role_assignment",
+  "playerId": "player_abc123",
+  "role": "Merlin",
+  "isGood": true,
+  "gameInfo": {...}
+}
+```
+
+7. 錯誤處理機制
+================
+7.1 連接錯誤
+- WebRTC連接失敗
+- 信號交換錯誤
+- 網路中斷處理
+
+7.2 掃描錯誤
+- 相機權限被拒絕
+- 設備不支援
+- 掃描庫載入失敗
+
+7.3 遊戲錯誤
+- 人數不支援
+- 角色分配失敗
+- 投票異常
+
+8. 安全性考慮
+==============
+8.1 資料安全
+- 本地P2P連接
+- 無伺服器儲存
+- 端到端加密
+
+8.2 權限管理
+- 相機權限請求
+- 用戶明確授權
+- 權限狀態檢查
+
+9. 效能優化
+============
+9.1 記憶體管理
+- 及時清理連接
+- 限制錯誤訊息數量
+- 避免記憶體洩漏
+
+9.2 網路優化
+- 信號壓縮
+- 連接池管理
+- 重連機制
+
+10. 擴展性設計
+===============
+10.1 模組化架構
+- 三層分離
+- 介面抽象
+- 插件支援
+
+10.2 多平台支援
+- 響應式設計
+- 觸控優化
+- 跨瀏覽器相容
+
+10.3 未來擴展
+- WebSocket支援
+- 多房間管理
+- 遊戲記錄 
