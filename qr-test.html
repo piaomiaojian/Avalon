@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR碼掃描測試</title>
+    <style>
+        body {
+            font-family: 'Microsoft JhengHei', Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            margin: 20px 0;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .btn:hover {
+            background: #0056b3;
+        }
+        .btn-success {
+            background: #28a745;
+        }
+        .btn-danger {
+            background: #dc3545;
+        }
+        .result {
+            margin: 10px 0;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            border-left: 4px solid #007bff;
+        }
+        .success {
+            border-left-color: #28a745;
+            background: #d4edda;
+        }
+        .error {
+            border-left-color: #dc3545;
+            background: #f8d7da;
+        }
+        .info {
+            border-left-color: #17a2b8;
+            background: #d1ecf1;
+        }
+        #scanContainer {
+            text-align: center;
+            margin: 20px 0;
+        }
+        #scan {
+            width: 300px;
+            height: 300px;
+            border: 2px solid #007bff;
+            border-radius: 10px;
+        }
+        .status {
+            margin: 10px 0;
+            padding: 10px;
+            background: #e9ecef;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .qr-display {
+            margin: 20px 0;
+            text-align: center;
+        }
+        .qr-display img {
+            border: 2px solid #007bff;
+            border-radius: 10px;
+        }
+        #scanError {
+            margin: 10px 0;
+            padding: 15px;
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 5px;
+            color: #856404;
+        }
+        .error-details {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 3px;
+            padding: 10px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+            overflow-x: auto;
+        }
+        .debug-info {
+            background: #e3f2fd;
+            border: 1px solid #bbdefb;
+            border-radius: 5px;
+            padding: 10px;
+            margin: 10px 0;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 QR碼掃描測試工具</h1>
+    
+    <div class="test-section">
+        <h2>1. 瀏覽器相容性測試</h2>
+        <button class="btn" onclick="testBrowserCompatibility()">測試瀏覽器支援</button>
+        <div id="browserResult"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>2. 相機權限測試</h2>
+        <button class="btn" onclick="testCameraPermission()">測試相機權限</button>
+        <div id="cameraResult"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>3. QR碼生成測試</h2>
+        <button class="btn" onclick="generateTestQR()">生成測試QR碼</button>
+        <div id="qrResult" class="qr-display"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>4. QR碼掃描測試</h2>
+        <button class="btn btn-success" onclick="startScanning()">開始掃描</button>
+        <button class="btn btn-danger" onclick="stopScanning()">停止掃描</button>
+        <button class="btn" onclick="retryScanning()">重試掃描</button>
+        <button class="btn" onclick="listCameras()">列出相機</button>
+        <div id="cameraList"></div>
+        <div id="scanContainer">
+            <div class="status" id="scanStatus">準備掃描...</div>
+            <div id="scanError" style="display: none;"></div>
+            <video id="scan"></video>
+        </div>
+        <div id="scanResult"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>5. 問題診斷</h2>
+        <button class="btn" onclick="runDiagnostics()">執行完整診斷</button>
+        <div id="diagnosticsResult"></div>
+    </div>
+
+    <!-- 外部庫 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
+
+    <script>
+        let codeReader = null;
+        let isScanning = false;
+
+        // 測試瀏覽器相容性
+        function testBrowserCompatibility() {
+            const result = document.getElementById('browserResult');
+            let html = '';
+
+            // 檢查 getUserMedia 支援
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                html += '<div class="result success">✅ getUserMedia API 支援</div>';
+            } else {
+                html += '<div class="result error">❌ getUserMedia API 不支援</div>';
+            }
+
+            // 檢查 WebRTC 支援
+            if (window.RTCPeerConnection || window.webkitRTCPeerConnection) {
+                html += '<div class="result success">✅ WebRTC 支援</div>';
+            } else {
+                html += '<div class="result error">❌ WebRTC 不支援</div>';
+            }
+
+            // 檢查 QRCode.js
+            if (typeof QRCode !== 'undefined') {
+                html += '<div class="result success">✅ QRCode.js 載入成功</div>';
+            } else {
+                html += '<div class="result error">❌ QRCode.js 載入失敗</div>';
+            }
+
+            // 檢查 ZXing
+            if (typeof ZXing !== 'undefined') {
+                html += '<div class="result success">✅ ZXing 載入成功</div>';
+            } else {
+                html += '<div class="result error">❌ ZXing 載入失敗</div>';
+            }
+
+            // 檢查 LZString
+            if (typeof LZString !== 'undefined') {
+                html += '<div class="result success">✅ LZString 載入成功</div>';
+            } else {
+                html += '<div class="result error">❌ LZString 載入失敗</div>';
+            }
+
+            result.innerHTML = html;
+        }
+
+        // 測試相機權限
+        async function testCameraPermission() {
+            const result = document.getElementById('cameraResult');
+            let html = '';
+
+            try {
+                html += '<div class="result info">正在請求相機權限...</div>';
+                result.innerHTML = html;
+
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: "environment",
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    } 
+                });
+
+                html += '<div class="result success">✅ 相機權限獲得成功</div>';
+                
+                // 檢查相機資訊
+                const videoTrack = stream.getVideoTracks()[0];
+                if (videoTrack) {
+                    const capabilities = videoTrack.getCapabilities();
+                    html += `<div class="result success">✅ 相機: ${videoTrack.label}</div>`;
+                    html += `<div class="result success">✅ 解析度: ${capabilities.width.max}x${capabilities.height.max}</div>`;
+                }
+
+                // 停止測試流
+                stream.getTracks().forEach(track => track.stop());
+                html += '<div class="result success">✅ 相機測試完成</div>';
+
+            } catch (error) {
+                html += `<div class="result error">❌ 相機權限錯誤: ${error.message}</div>`;
+                
+                if (error.name === 'NotAllowedError') {
+                    html += '<div class="result error">💡 請在瀏覽器設定中允許相機權限</div>';
+                } else if (error.name === 'NotFoundError') {
+                    html += '<div class="result error">💡 找不到相機設備</div>';
+                } else if (error.name === 'NotSupportedError') {
+                    html += '<div class="result error">💡 瀏覽器不支援相機功能</div>';
+                }
+            }
+
+            result.innerHTML = html;
+        }
+
+        // 生成測試QR碼
+        function generateTestQR() {
+            const result = document.getElementById('qrResult');
+            
+            // 生成測試資料
+            const testData = {
+                type: 'test',
+                timestamp: Date.now(),
+                message: '這是一個測試QR碼'
+            };
+            
+            const compressed = LZString.compressToBase64(JSON.stringify(testData));
+            
+            // 清除之前的QR碼
+            result.innerHTML = '';
+            
+            // 生成新的QR碼
+            const qr = new QRCode(result, {
+                text: compressed,
+                width: 200,
+                height: 200,
+                colorDark: "#000000",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.L
+            });
+            
+            result.innerHTML += `<div class="result success">✅ 測試QR碼生成成功</div>`;
+            result.innerHTML += `<div class="result info">測試資料: ${compressed.substring(0, 50)}...</div>`;
+        }
+
+        // 開始掃描
+        async function startScanning() {
+            if (isScanning) {
+                return;
+            }
+
+            const statusElement = document.getElementById('scanStatus');
+            const errorElement = document.getElementById('scanError');
+            const resultElement = document.getElementById('scanResult');
+            const videoElement = document.getElementById('scan');
+            
+            // 清除之前的錯誤
+            errorElement.style.display = 'none';
+            errorElement.innerHTML = '';
+            resultElement.innerHTML = '';
+            
+            try {
+                isScanning = true;
+                statusElement.textContent = '正在檢查掃描器庫...';
+                
+                // 檢查 ZXing 是否可用
+                if (typeof ZXing === 'undefined') {
+                    throw new Error('ZXing 庫未載入，請檢查網路連接');
+                }
+
+                statusElement.textContent = '正在創建掃描器...';
+                
+                // 創建 ZXing 掃描器實例
+                codeReader = new ZXing.BrowserMultiFormatReader();
+                
+                statusElement.textContent = '正在啟動相機...';
+                
+                // 啟動掃描器
+                await codeReader.decodeFromVideoDevice(
+                    null, // 使用預設相機
+                    videoElement,
+                    (result, error) => {
+                        if (result) {
+                            // 掃描成功
+                            const decodedText = result.getText();
+                            statusElement.textContent = '掃描成功！';
+                            resultElement.innerHTML = `
+                                <div class="result success">
+                                    <strong>掃描結果:</strong><br>
+                                    <pre>${decodedText}</pre>
+                                </div>
+                            `;
+                            
+                            // 嘗試解析資料
+                            try {
+                                const decompressed = LZString.decompressFromBase64(decodedText);
+                                const parsed = JSON.parse(decompressed);
+                                resultElement.innerHTML += `
+                                    <div class="result success">
+                                        <strong>解析結果:</strong><br>
+                                        <pre>${JSON.stringify(parsed, null, 2)}</pre>
+                                    </div>
+                                `;
+                            } catch (e) {
+                                resultElement.innerHTML += `
+                                    <div class="result error">
+                                        <strong>解析失敗:</strong> ${e.message}
+                                    </div>
+                                `;
+                            }
+                            
+                            stopScanning();
+                        }
+                        
+                        if (error && error.name !== 'NotFoundException') {
+                            // 掃描錯誤（非致命）
+                            statusElement.textContent = '正在掃描，請對準QR碼...';
+                        }
+                    }
+                );
+
+                statusElement.textContent = '掃描器已啟動，請對準QR碼';
+
+            } catch (error) {
+                console.error('掃描器啟動失敗:', error);
+                isScanning = false;
+                statusElement.textContent = '掃描器啟動失敗';
+                
+                // 在頁面上顯示詳細錯誤
+                let errorMessage = error.message;
+                let errorDetails = '';
+                let solution = '';
+
+                // 根據錯誤類型提供具體建議
+                if (error.name === 'NotAllowedError') {
+                    errorMessage = '相機權限被拒絕';
+                    errorDetails = '瀏覽器拒絕了相機權限請求';
+                    solution = '請點擊網址列左側的相機圖示允許權限，或重新載入頁面';
+                } else if (error.name === 'NotFoundError') {
+                    errorMessage = '找不到相機設備';
+                    errorDetails = '系統無法找到可用的相機設備';
+                    solution = '請確認設備有相機，且沒有被其他應用程式使用';
+                } else if (error.name === 'NotSupportedError') {
+                    errorMessage = '瀏覽器不支援相機功能';
+                    errorDetails = '當前瀏覽器不支援getUserMedia API';
+                    solution = '請使用Chrome、Firefox、Safari或Edge瀏覽器';
+                } else if (error.name === 'NotReadableError') {
+                    errorMessage = '相機被其他應用程式佔用';
+                    errorDetails = '相機正在被其他應用程式使用';
+                    solution = '請關閉其他使用相機的應用程式（如相機、視訊通話等）';
+                } else if (error.name === 'OverconstrainedError') {
+                    errorMessage = '相機配置不支援';
+                    errorDetails = '請求的相機配置不被設備支援';
+                    solution = '請嘗試重新載入頁面或使用不同的瀏覽器';
+                } else if (error.message.includes('ZXing')) {
+                    errorMessage = '掃描器庫載入失敗';
+                    errorDetails = '無法載入ZXing庫';
+                    solution = '請檢查網路連接，重新載入頁面';
+                } else if (error.message.includes('HTTPS')) {
+                    errorMessage = '需要HTTPS連接';
+                    errorDetails = '相機功能需要安全的HTTPS連接';
+                    solution = '請使用HTTPS網址或localhost';
+                } else if (error.message.includes('permission')) {
+                    errorMessage = '權限問題';
+                    errorDetails = error.message;
+                    solution = '請在瀏覽器設定中允許相機權限';
+                } else if (error.message.includes('decodeFromVideoDevice')) {
+                    errorMessage = '掃描器啟動失敗';
+                    errorDetails = 'ZXing啟動過程中發生錯誤';
+                    solution = '請嘗試重新載入頁面或使用不同的瀏覽器';
+                }
+
+                // 顯示錯誤訊息
+                errorElement.innerHTML = `
+                    <div class="result error">
+                        <strong>錯誤類型:</strong> ${errorMessage}<br>
+                        <strong>錯誤詳情:</strong> ${errorDetails}<br>
+                        <strong>解決方案:</strong> ${solution}<br>
+                        <strong>錯誤名稱:</strong> ${error.name}<br>
+                        <strong>完整錯誤:</strong><br>
+                        <div class="error-details">${error.stack || error.message}</div>
+                    </div>
+                `;
+                errorElement.style.display = 'block';
+            }
+        }
+
+        // 停止掃描
+        function stopScanning() {
+            const statusElement = document.getElementById('scanStatus');
+            const videoElement = document.getElementById('scan');
+            
+            if (codeReader && isScanning) {
+                codeReader.reset();
+            }
+            
+            // 停止相機流
+            if (videoElement.srcObject) {
+                const stream = videoElement.srcObject;
+                stream.getTracks().forEach(track => track.stop());
+                videoElement.srcObject = null;
+            }
+            
+            isScanning = false;
+            statusElement.textContent = '掃描已停止';
+        }
+
+        // 重試掃描
+        function retryScanning() {
+            startScanning();
+        }
+
+        // 列出可用相機
+        async function listCameras() {
+            const cameraListElement = document.getElementById('cameraList');
+            
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const videoDevices = devices.filter(device => device.kind === 'videoinput');
+                
+                if (videoDevices.length === 0) {
+                    cameraListElement.innerHTML = '<div class="result error">❌ 找不到相機設備</div>';
+                    return;
+                }
+                
+                let html = '<div class="result info"><strong>可用相機:</strong></div>';
+                videoDevices.forEach((device, index) => {
+                    html += `
+                        <div class="result info">
+                            <strong>相機 ${index + 1}:</strong> ${device.label || `相機 ${index + 1}`}<br>
+                            <button class="btn" onclick="startScanningWithCamera('${device.deviceId}')">使用此相機</button>
+                        </div>
+                    `;
+                });
+                
+                cameraListElement.innerHTML = html;
+                
+            } catch (error) {
+                cameraListElement.innerHTML = `
+                    <div class="result error">
+                        ❌ 無法列出相機: ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        // 使用指定相機開始掃描
+        async function startScanningWithCamera(deviceId) {
+            if (isScanning) {
+                stopScanning();
+            }
+            
+            const statusElement = document.getElementById('scanStatus');
+            const errorElement = document.getElementById('scanError');
+            const resultElement = document.getElementById('scanResult');
+            const videoElement = document.getElementById('scan');
+            
+            // 清除之前的錯誤
+            errorElement.style.display = 'none';
+            errorElement.innerHTML = '';
+            resultElement.innerHTML = '';
+            
+            try {
+                isScanning = true;
+                statusElement.textContent = '正在檢查掃描器庫...';
+                
+                // 檢查 ZXing 是否可用
+                if (typeof ZXing === 'undefined') {
+                    throw new Error('ZXing 庫未載入，請檢查網路連接');
+                }
+
+                statusElement.textContent = '正在創建掃描器...';
+                
+                // 創建 ZXing 掃描器實例
+                codeReader = new ZXing.BrowserMultiFormatReader();
+                
+                statusElement.textContent = '正在啟動指定相機...';
+                
+                // 啟動掃描器，使用指定的相機
+                await codeReader.decodeFromVideoDevice(
+                    deviceId,
+                    videoElement,
+                    (result, error) => {
+                        if (result) {
+                            // 掃描成功
+                            const decodedText = result.getText();
+                            statusElement.textContent = '掃描成功！';
+                            resultElement.innerHTML = `
+                                <div class="result success">
+                                    <strong>掃描結果:</strong><br>
+                                    <pre>${decodedText}</pre>
+                                </div>
+                            `;
+                            
+                            // 嘗試解析資料
+                            try {
+                                const decompressed = LZString.decompressFromBase64(decodedText);
+                                const parsed = JSON.parse(decompressed);
+                                resultElement.innerHTML += `
+                                    <div class="result success">
+                                        <strong>解析結果:</strong><br>
+                                        <pre>${JSON.stringify(parsed, null, 2)}</pre>
+                                    </div>
+                                `;
+                            } catch (e) {
+                                resultElement.innerHTML += `
+                                    <div class="result error">
+                                        <strong>解析失敗:</strong> ${e.message}
+                                    </div>
+                                `;
+                            }
+                            
+                            stopScanning();
+                        }
+                        
+                        if (error && error.name !== 'NotFoundException') {
+                            // 掃描錯誤（非致命）
+                            statusElement.textContent = '正在掃描，請對準QR碼...';
+                        }
+                    }
+                );
+
+                statusElement.textContent = '掃描器已啟動，請對準QR碼';
+
+            } catch (error) {
+                console.error('掃描器啟動失敗:', error);
+                isScanning = false;
+                statusElement.textContent = '掃描器啟動失敗';
+                
+                // 顯示錯誤訊息
+                errorElement.innerHTML = `
+                    <div class="result error">
+                        <strong>錯誤類型:</strong> ${error.message}<br>
+                        <strong>錯誤詳情:</strong> 使用指定相機時發生錯誤<br>
+                        <strong>解決方案:</strong> 請嘗試使用預設相機或重新載入頁面<br>
+                        <strong>完整錯誤:</strong><br>
+                        <div class="error-details">${error.stack || error.message}</div>
+                    </div>
+                `;
+                errorElement.style.display = 'block';
+            }
+        }
+
+        // 執行完整診斷
+        async function runDiagnostics() {
+            const result = document.getElementById('diagnosticsResult');
+            let html = '<div class="result info">正在執行診斷...</div>';
+            result.innerHTML = html;
+
+            const issues = [];
+            const suggestions = [];
+
+            // 1. 檢查瀏覽器支援
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                issues.push('瀏覽器不支援相機功能');
+                suggestions.push('請使用 Chrome、Firefox、Safari 或 Edge 瀏覽器');
+            } else {
+                html += '<div class="result success">✅ 瀏覽器支援相機功能</div>';
+            }
+
+            // 2. 檢查HTTPS
+            if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+                issues.push('相機功能需要HTTPS連接（localhost除外）');
+                suggestions.push('請使用 HTTPS 網址或部署到支援 HTTPS 的伺服器');
+            } else {
+                html += '<div class="result success">✅ 連接協議正確</div>';
+            }
+
+            // 3. 檢查GitHub Pages特定問題
+            if (location.hostname.includes('github.io')) {
+                html += '<div class="result info">ℹ️ 檢測到GitHub Pages部署</div>';
+                
+                // 檢查是否為正確的HTTPS
+                if (location.protocol === 'https:') {
+                    html += '<div class="result success">✅ GitHub Pages HTTPS 正確</div>';
+                } else {
+                    issues.push('GitHub Pages需要HTTPS連接');
+                    suggestions.push('請使用 https:// 開頭的網址');
+                }
+                
+                // 檢查檔案路徑
+                if (location.pathname.includes('/index.html') || location.pathname.endsWith('/')) {
+                    html += '<div class="result success">✅ 檔案路徑正確</div>';
+                } else {
+                    issues.push('可能不是正確的入口頁面');
+                    suggestions.push('請確認訪問的是正確的網址');
+                }
+            }
+
+            // 4. 檢查庫載入
+            if (typeof ZXing === 'undefined') {
+                issues.push('ZXing庫載入失敗');
+                suggestions.push('請檢查網路連接，重新載入頁面');
+            } else {
+                html += '<div class="result success">✅ ZXing庫載入成功</div>';
+            }
+
+            if (typeof QRCode === 'undefined') {
+                issues.push('QRCode.js庫載入失敗');
+                suggestions.push('請檢查網路連接，重新載入頁面');
+            } else {
+                html += '<div class="result success">✅ QRCode.js庫載入成功</div>';
+            }
+
+            // 5. 檢查瀏覽器版本
+            const userAgent = navigator.userAgent;
+            if (userAgent.includes('Chrome')) {
+                const version = userAgent.match(/Chrome\/(\d+)/);
+                if (version && parseInt(version[1]) < 53) {
+                    issues.push('Chrome版本過舊，建議升級到最新版本');
+                    suggestions.push('請更新 Chrome 瀏覽器到最新版本');
+                } else {
+                    html += '<div class="result success">✅ Chrome版本支援</div>';
+                }
+            } else if (userAgent.includes('Firefox')) {
+                const version = userAgent.match(/Firefox\/(\d+)/);
+                if (version && parseInt(version[1]) < 36) {
+                    issues.push('Firefox版本過舊，建議升級到最新版本');
+                    suggestions.push('請更新 Firefox 瀏覽器到最新版本');
+                } else {
+                    html += '<div class="result success">✅ Firefox版本支援</div>';
+                }
+            } else if (userAgent.includes('Safari')) {
+                const version = userAgent.match(/Version\/(\d+)/);
+                if (version && parseInt(version[1]) < 11) {
+                    issues.push('Safari版本過舊，建議升級到最新版本');
+                    suggestions.push('請更新 Safari 瀏覽器到最新版本');
+                } else {
+                    html += '<div class="result success">✅ Safari版本支援</div>';
+                }
+            }
+
+            // 6. 測試相機權限
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: "environment",
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    } 
+                });
+                
+                // 檢查相機資訊
+                const videoTrack = stream.getVideoTracks()[0];
+                if (videoTrack) {
+                    html += `<div class="result success">✅ 相機權限獲得成功</div>`;
+                    html += `<div class="result success">✅ 相機: ${videoTrack.label}</div>`;
+                    
+                    const capabilities = videoTrack.getCapabilities();
+                    if (capabilities) {
+                        html += `<div class="result success">✅ 解析度支援: ${capabilities.width.max}x${capabilities.height.max}</div>`;
+                    }
+                }
+                
+                // 停止測試流
+                stream.getTracks().forEach(track => track.stop());
+                
+            } catch (error) {
+                issues.push(`相機權限問題: ${error.message}`);
+                
+                if (error.name === 'NotAllowedError') {
+                    suggestions.push('請在瀏覽器設定中允許相機權限，或點擊網址列左側的相機圖示允許權限');
+                } else if (error.name === 'NotFoundError') {
+                    suggestions.push('請確認設備有相機，且沒有被其他應用程式使用');
+                } else if (error.name === 'NotSupportedError') {
+                    suggestions.push('請使用支援的瀏覽器（Chrome、Firefox、Safari等）');
+                } else if (error.name === 'NotReadableError') {
+                    suggestions.push('相機可能被其他應用程式佔用，請關閉其他使用相機的應用程式');
+                }
+            }
+
+            // 7. 檢查設備類型
+            if (/Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent)) {
+                html += '<div class="result success">✅ 檢測到移動設備</div>';
+                
+                // 檢查Chrome移動版特定問題
+                if (userAgent.includes('Chrome') && /Android|iPhone|iPad|iPod/i.test(userAgent)) {
+                    html += '<div class="result info">ℹ️ 檢測到Chrome移動版</div>';
+                    
+                    // 檢查Chrome版本
+                    const chromeVersion = userAgent.match(/Chrome\/(\d+)/);
+                    if (chromeVersion && parseInt(chromeVersion[1]) < 53) {
+                        issues.push('Chrome移動版版本過舊');
+                        suggestions.push('請更新Chrome到最新版本');
+                    }
+                }
+            } else {
+                html += '<div class="result info">ℹ️ 檢測到桌面設備，建議使用手機測試</div>';
+            }
+
+            // 8. 顯示詳細的調試資訊
+            html += `
+                <div class="debug-info">
+                    <strong>調試資訊:</strong><br>
+                    網址: ${location.href}<br>
+                    協議: ${location.protocol}<br>
+                    主機: ${location.hostname}<br>
+                    路徑: ${location.pathname}<br>
+                    用戶代理: ${userAgent.substring(0, 100)}...<br>
+                    螢幕解析度: ${screen.width}x${screen.height}<br>
+                    視窗大小: ${window.innerWidth}x${window.innerHeight}
+                </div>
+            `;
+
+            // 顯示結果
+            if (issues.length === 0) {
+                html += '<div class="result success">✅ 所有診斷項目通過，掃描功能應該正常</div>';
+                html += '<div class="result info">💡 如果仍然無法掃描，請嘗試使用「重試掃描」</div>';
+            } else {
+                html += '<div class="result error"><strong>發現問題:</strong></div>';
+                issues.forEach((issue, index) => {
+                    html += `<div class="result error">❌ ${issue}</div>`;
+                    if (suggestions[index]) {
+                        html += `<div class="result info">💡 ${suggestions[index]}</div>`;
+                    }
+                });
+                html += '<div class="result info">💡 請解決上述問題後再嘗試掃描</div>';
+                html += '<div class="result info">💡 或者嘗試使用「重試掃描」作為備選方案</div>';
+            }
+
+            result.innerHTML = html;
+        }
+
+        // 頁面載入時自動執行基本測試
+        window.onload = function() {
+            console.log('QR碼掃描測試工具已載入');
+            console.log('ZXing 可用:', typeof ZXing !== 'undefined');
+            testBrowserCompatibility();
+        };
+
+        // 頁面卸載時清理資源
+        window.onbeforeunload = function() {
+            stopScanning();
+        };
+    </script>
+</body>
+</html> 

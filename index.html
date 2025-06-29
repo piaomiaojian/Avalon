@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>阿瓦隆 - 手機版</title>
+    <link rel="stylesheet" href="style.css?v=1.0.15">
+</head>
+<body>
+    <div class="container">
+        <h1>🏰 阿瓦隆 - 1.0.15</h1>
+        
+        <!-- 主選單 -->
+        <div id="mainMenu">
+            <div class="button-group">
+                <button class="btn" id="btnHost">🏠 創建房間</button>
+                <button class="btn btn-secondary" id="btnJoin">🔗 加入房間</button>
+            </div>
+        </div>
+
+        <!-- QR碼區域 -->
+        <div id="qrContainer" class="qr-container hidden">
+            <h3 id="qrTitle">掃描此QR碼加入遊戲</h3>
+            <br>
+            <br>
+            <div id="qr"></div>
+            <div id="qrText" class="qr-text"></div>
+        </div>
+
+        <!-- 掃描區域 -->
+        <div id="scanContainer" class="scan-container hidden">
+            <h3>掃描房主的QR碼</h3>
+            <div class="status" id="scanStatus">準備掃描...</div>
+            <div id="scanError" style="display: none;"></div>
+            <div id="scanResult"></div>
+            <div class="camera-preview">
+                <video id="scan"></video>
+                <div class="scan-overlay">
+                    <div class="scan-frame"></div>
+                    <div class="scan-indicator" id="scanIndicator"></div>
+                </div>
+            </div>
+            <div class="scan-feedback">
+                <div class="feedback-text" id="feedbackText">請將QR碼對準綠色框框內</div>
+                <div class="scan-progress" id="scanProgress"></div>
+            </div>
+            <div style="margin: 20px 0;">
+                <input id="manualQrInput" type="text" placeholder="可貼上QR碼內容" style="width: 80%; padding: 8px; border-radius: 6px; border: 1px solid #ccc; font-size: 1rem;margin-bottom: 10px;">
+                <button id="btnManualJoin" class="btn btn-secondary" style="margin-left: 8px;">手動加入</button>
+            </div>
+            <button id="retryScan" class="btn" style="margin-top: 10px; display: none;">重新掃描</button>
+            <button id="btnBackToQR" class="btn btn-secondary" style="margin-top: 10px; display: none;">返回QR碼</button>
+        </div>
+
+        <!-- 遊戲區域 -->
+        <div id="gameArea" class="game-area hidden">
+            <div id="status" class="status">等待玩家加入...</div>
+            
+            <div id="playerList" class="player-list"></div>
+            
+            <div id="roleCard" class="role-card hidden">
+                <div class="role-name" id="roleName"></div>
+                <div class="role-description" id="roleDescription"></div>
+            </div>
+
+            <div id="missionProgress" class="mission-progress hidden">
+                <h3>任務進度</h3>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div id="missionInfo"></div>
+            </div>
+
+            <div id="voteButtons" class="vote-buttons hidden">
+                <button class="vote-btn vote-success" id="btnVoteSuccess">✅ 成功</button>
+                <button class="vote-btn vote-fail" id="btnVoteFail">❌ 失敗</button>
+            </div>
+
+            <div id="chatArea" class="chat-area">
+                <h3>遊戲訊息</h3>
+                <div id="chatMessages"></div>
+            </div>
+        </div>
+
+        <!-- 錯誤顯示區域 -->
+        <div id="errorContainer" class="error-container hidden">
+            <h3>⚠️ 錯誤訊息</h3>
+            <div id="errorMessages"></div>
+            <button id="clearErrors" class="btn btn-secondary">清除錯誤</button>
+        </div>
+    </div>
+
+    <!-- 外部庫 -->
+    <script src="https://unpkg.com/simple-peer@9.11.1/simplepeer.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
+
+    <!-- 遊戲腳本 -->
+    <script src="transport.js?v=1.0.15"></script>
+    <script src="game.js?v=1.0.15"></script>
+    <script src="app.js?v=1.0.15"></script>
+</body>
+</html> 

@@ -1,0 +1,61 @@
+方案：使用房主手機當「中繼伺服器」進行多方通訊（無中央伺服器）
+🧱 架構概念
+所有玩家的裝置透過 WebRTC 與「房主手機」建立 P2P 連線。
+
+房主裝置負責轉送所有訊息 → 就像是 WebSocket 伺服器一樣。
+
+資料路徑如下：
+
+css
+複製
+編輯
+玩家A <───WebRTC───> 房主 <───WebRTC───> 玩家B
+                            │
+                            └───WebRTC───> 玩家C
+房主扮演“中央轉送站”的角色。
+
+✅ 優點
+✅ 完全不需要伺服器
+
+✅ 支援多人遊戲（2～5人沒問題）
+
+✅ 只需房主手機維持運作，其它裝置皆可純前端
+
+✅ 每個人只需掃房主的 QR code，就能加入房間
+
+⚠️ 注意事項
+項目	說明
+性能瓶頸	所有訊息都經由房主裝置，若人數過多或訊息量大，會卡
+房主斷線	房主離開會讓所有連線斷線（因為是 relay）
+信令交換仍需手動（或局部自動）	每個玩家與房主建立 WebRTC 時，仍需交換 offer/answer
+不適合重度多人即時遊戲	如 FPS、MOBA，因延遲較高、不穩定
+
+🚀 建立流程（建議方式）
+房主產生 WebRTC offer → 顯示成 QR code
+
+玩家掃描 QR → 得到房主的 offer → 建立連線 → 傳 answer 回房主（可以再產生 QR code 或用 BroadcastChannel）
+
+房主收下 answer → 完成 WebRTC P2P 配對
+
+房主維護一個「連線列表」：每個玩家的連線 + 名稱/角色 ID
+
+所有玩家透過房主轉送訊息（例如投票、角色發言等）
+
+🔧 技術選項
+使用 WebRTC DataChannel 建立連線（純文字、低延遲）
+
+使用 zxing-js 開 QR code 掃描 offer/answer
+
+房主維護一個小型 relay 函式：
+
+js
+複製
+編輯
+function relayToAllClients(senderId, message) {
+  for (const peerId in peers) {
+    if (peerId !== senderId) {
+      peers[peerId].send(message);
+    }
+  }
+}
+可進一步使用 JSON 格式區分不同類型的訊息（遊戲指令、聊天、心跳等）

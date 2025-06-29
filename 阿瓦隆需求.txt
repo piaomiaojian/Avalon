@@ -1,0 +1,165 @@
+阿瓦隆遊戲需求文件
+==================
+
+1. 資料傳輸層 (Transport Layer)
+==============================
+
+1.1 通訊協議
+- 使用 JSON 格式傳輸所有資料
+- 支援離線模式：WebRTC P2P + QR碼配對
+- 支援線上模式：WebSocket + 自動配對（未來擴展）
+- 資料壓縮：使用 LZ-string 壓縮 SDP 信號
+
+1.2 訊息類型定義
+```json
+{
+  "type": "signal",           // WebRTC 信號交換
+  "type": "game_state",       // 遊戲狀態更新
+  "type": "player_action",    // 玩家動作
+  "type": "role_assignment",  // 角色分配
+  "type": "mission_vote",     // 任務投票
+  "type": "game_result"       // 遊戲結果
+}
+```
+
+1.3 核心訊息結構
+- 信號交換：{type: "signal", data: {offer/answer}}
+- 遊戲狀態：{type: "game_state", state: {...}, players: [...]}
+- 玩家動作：{type: "player_action", action: "...", data: {...}}
+- 角色分配：{type: "role_assignment", playerId: "...", role: "..."}
+- 任務投票：{type: "mission_vote", playerId: "...", vote: true/false}
+- 遊戲結果：{type: "game_result", winner: "good/evil", details: {...}}
+
+1.4 傳輸抽象層
+- 統一的 send() 和 onMessage() 介面
+- 支援離線 WebRTC 和線上 WebSocket 切換
+- 自動重連機制
+- 錯誤處理和超時機制
+
+2. 遊戲邏輯層 (Game Logic)
+==========================
+
+2.1 遊戲狀態機
+- 等待玩家加入 (WAITING_FOR_PLAYERS)
+- 角色分配 (ROLE_ASSIGNMENT)
+- 遊戲開始 (GAME_START)
+- 選擇隊長 (LEADER_SELECTION)
+- 選擇任務成員 (MEMBER_SELECTION)
+- 任務投票 (MISSION_VOTE)
+- 任務執行 (MISSION_EXECUTION)
+- 遊戲結束 (GAME_END)
+
+2.2 角色系統
+好人陣營：
+- 梅林 (Merlin)：知道所有壞人身份
+- 派西維爾 (Percival)：知道梅林和莫甘娜
+- 忠誠的僕人 (Loyal Servant)：普通好人
+
+壞人陣營：
+- 莫甘娜 (Morgana)：假裝是梅林
+- 莫德雷德 (Mordred)：梅林看不到
+- 奧伯倫 (Oberon)：不知道其他壞人
+- 刺客 (Assassin)：遊戲結束後可以刺殺梅林
+
+2.3 遊戲規則
+- 5-10人遊戲，根據人數調整角色配置
+- 5輪任務，每輪需要不同數量的任務成員
+- 任務成功需要所有好人投票贊成
+- 壞人陣營需要3次任務失敗獲勝
+- 好人陣營需要3次任務成功獲勝
+- 遊戲結束後，壞人可以刺殺梅林
+
+2.4 核心功能
+- 隨機角色分配
+- 隊長輪換機制
+- 投票計票系統
+- 任務成功/失敗判定
+- 遊戲勝負判定
+- 梅林刺殺機制
+
+3. 介面UI層 (User Interface)
+============================
+
+3.1 主要頁面
+- 主選單頁面 (Main Menu)
+- 房間創建/加入頁面 (Room Setup)
+- 遊戲大廳頁面 (Game Lobby)
+- 角色查看頁面 (Role View)
+- 遊戲主頁面 (Game Main)
+- 投票頁面 (Voting)
+- 結果頁面 (Results)
+
+3.2 核心UI元件
+- 玩家列表 (Player List)
+- 角色卡片 (Role Card)
+- 投票按鈕 (Vote Buttons)
+- 任務進度條 (Mission Progress)
+- 聊天區域 (Chat Area)
+- QR碼顯示/掃描 (QR Code)
+- 遊戲狀態指示器 (Status Indicator)
+
+3.3 響應式設計
+- 手機優先設計 (Mobile First)
+- 支援橫屏和豎屏
+- 觸控友好的按鈕大小
+- 清晰的視覺層次
+- 直觀的導航流程
+
+3.4 視覺設計
+- 阿瓦隆主題色彩
+- 中世紀風格元素
+- 清晰的圖標和文字
+- 適當的動畫效果
+- 良好的對比度
+
+3.5 使用者體驗
+- 簡潔的操作流程
+- 清晰的狀態提示
+- 錯誤處理和提示
+- 載入狀態顯示
+- 音效反饋（可選）
+
+4. 技術實現細節
+==================
+
+4.1 前端技術棧
+- HTML5 + CSS3 + JavaScript (ES6+)
+- 可選：Vue.js 或 React 框架
+- WebRTC (simple-peer)
+- QR碼生成/掃描
+- 本地存儲 (localStorage)
+
+4.2 部署方案
+- GitHub Pages（離線版本）
+- 靜態網站託管
+- PWA 支援（可選）
+
+4.3 擴展性考慮
+- 模組化架構
+- 插件系統
+- 多語言支援
+- 主題切換
+- 自定義規則
+
+5. 開發階段規劃
+==================
+
+第一階段：核心功能
+- 基本UI框架
+- WebRTC連接
+- 簡單遊戲邏輯
+
+第二階段：完整遊戲
+- 所有角色實現
+- 完整遊戲流程
+- 投票系統
+
+第三階段：優化體驗
+- UI美化
+- 動畫效果
+- 錯誤處理
+
+第四階段：擴展功能
+- 線上模式
+- 更多自定義選項
+- 統計功能 

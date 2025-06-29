@@ -1,0 +1,297 @@
+body {
+    font-family: 'Microsoft JhengHei', Arial, sans-serif;
+    background: linear-gradient(135deg, #2d3436 0%, #636e72 100%);
+    color: #fff;
+    min-height: 100vh;
+    margin: 0;
+    padding: 0;
+}
+.container {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 20px 0 40px 0;
+}
+h1 {
+    text-align: center;
+    font-size: 2rem;
+    margin: 20px 0 30px 0;
+    letter-spacing: 2px;
+}
+.button-group {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    margin: 30px 0;
+}
+.btn {
+    background: linear-gradient(45deg, #00b894, #00cec9);
+    color: #fff;
+    border: none;
+    padding: 15px 35px;
+    border-radius: 10px;
+    font-size: 1.2rem;
+    font-weight: bold;
+    cursor: pointer;
+    margin: 0 10px;
+    transition: background 0.2s, box-shadow 0.2s;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+.btn:hover {
+    background: linear-gradient(45deg, #00cec9, #00b894);
+}
+.btn-secondary {
+    background: linear-gradient(45deg, #636e72, #b2bec3);
+    color: #222;
+}
+.qr-container {
+    text-align: center;
+    margin: 30px 0;
+}
+.qr-text {
+    margin-top: 10px;
+    word-break: break-all;
+    color: #fff;
+    font-size: 0.95rem;
+    background: rgba(0,0,0,0.15);
+    padding: 8px 10px;
+    border-radius: 6px;
+}
+.scan-container {
+    text-align: center;
+    margin: 20px 0;
+}
+.camera-preview {
+    position: relative;
+    display: inline-block;
+    margin: 20px 0;
+}
+#scan {
+    width: 300px;
+    height: 300px;
+    border: 2px solid #007bff;
+    border-radius: 10px;
+    background: #000;
+}
+.scan-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+.scan-frame {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 200px;
+    height: 200px;
+    border: 2px solid #00ff00;
+    border-radius: 10px;
+    /* box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5); */
+}
+.scan-indicator {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 200px;
+    height: 200px;
+    border: 3px solid transparent;
+    border-radius: 10px;
+    transition: all 0.3s ease;
+}
+.scan-indicator.scanning {
+    border-color: #00ff00;
+    box-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
+    animation: scanPulse 1s infinite;
+}
+.scan-indicator.detected {
+    border-color: #00b894;
+    box-shadow: 0 0 30px rgba(0, 184, 148, 0.8);
+    animation: scanSuccess 0.5s ease;
+}
+@keyframes scanPulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+@keyframes scanSuccess {
+    0% { transform: translate(-50%, -50%) scale(1); }
+    50% { transform: translate(-50%, -50%) scale(1.1); }
+    100% { transform: translate(-50%, -50%) scale(1); }
+}
+.scan-feedback {
+    text-align: center;
+    margin: 20px 0;
+}
+.feedback-text {
+    font-size: 1.2rem;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+.scan-progress {
+    width: 100%;
+    height: 20px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    overflow: hidden;
+    margin: 10px 0;
+}
+.scan-progress-fill {
+    height: 100%;
+    background: linear-gradient(45deg, #00b894, #00cec9);
+    transition: width 0.3s ease;
+}
+.status {
+    margin: 10px 0;
+    padding: 10px;
+    background: #e9ecef;
+    border-radius: 5px;
+    font-weight: bold;
+    color: #333;
+}
+#scanError {
+    margin: 10px 0;
+    padding: 15px;
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 5px;
+    color: #856404;
+}
+#scanResult {
+    margin: 10px 0;
+}
+.game-area {
+    /* 移除 display: none，讓它使用 hidden class 來控制顯示 */
+}
+.player-list {
+    margin: 20px 0;
+}
+.player-item {
+    background: rgba(255, 255, 255, 0.1);
+    margin: 10px 0;
+    padding: 15px;
+    border-radius: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.status {
+    text-align: center;
+    margin: 20px 0;
+    padding: 15px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    font-weight: bold;
+}
+.hidden {
+    display: none;
+}
+.role-card {
+    background: linear-gradient(45deg, #00b894, #00cec9);
+    padding: 20px;
+    border-radius: 15px;
+    text-align: center;
+    margin: 20px 0;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+}
+.role-name {
+    font-size: 1.5rem;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+.role-description {
+    font-size: 0.9rem;
+    opacity: 0.9;
+}
+.vote-buttons {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    margin: 20px 0;
+}
+.vote-btn {
+    padding: 15px 30px;
+    border: none;
+    border-radius: 10px;
+    font-size: 1.1rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+.vote-success {
+    background: linear-gradient(45deg, #00b894, #00cec9);
+    color: white;
+}
+.vote-fail {
+    background: linear-gradient(45deg, #e17055, #d63031);
+    color: white;
+}
+.mission-progress {
+    margin: 20px 0;
+    padding: 15px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+}
+.progress-bar {
+    width: 100%;
+    height: 20px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    overflow: hidden;
+    margin: 10px 0;
+}
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(45deg, #00b894, #00cec9);
+    transition: width 0.3s ease;
+}
+.chat-area {
+    margin: 20px 0;
+    padding: 15px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+.chat-message {
+    margin: 5px 0;
+    padding: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 5px;
+}
+.error-container {
+    margin-top: 20px;
+    padding: 20px;
+    background: rgba(255, 107, 107, 0.1);
+    border: 2px solid #ff6b6b;
+    border-radius: 10px;
+    text-align: center;
+}
+.error-message {
+    background: rgba(255, 107, 107, 0.2);
+    color: #fff;
+    padding: 10px;
+    margin: 10px 0;
+    border-radius: 5px;
+    text-align: left;
+    font-family: monospace;
+    font-size: 0.9rem;
+    word-break: break-word;
+}
+.error-time {
+    color: #ffd93d;
+    font-size: 0.8rem;
+    margin-bottom: 5px;
+}
+.error-content {
+    color: #fff;
+}
+.error-stack {
+    color: #ffb3b3;
+    font-size: 0.8rem;
+    margin-top: 5px;
+    white-space: pre-wrap;
+} 

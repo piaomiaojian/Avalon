@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>阿瓦隆 - 功能測試</title>
+    <style>
+        body {
+            font-family: 'Microsoft JhengHei', Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            margin: 20px 0;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .btn:hover {
+            background: #0056b3;
+        }
+        .result {
+            margin: 10px 0;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            border-left: 4px solid #007bff;
+        }
+        .success {
+            border-left-color: #28a745;
+            background: #d4edda;
+        }
+        .error {
+            border-left-color: #dc3545;
+            background: #f8d7da;
+        }
+        .info {
+            border-left-color: #17a2b8;
+            background: #d1ecf1;
+        }
+        #scanContainer {
+            text-align: center;
+            margin: 20px 0;
+        }
+        #scan {
+            width: 300px;
+            height: 300px;
+            border: 2px solid #007bff;
+            border-radius: 10px;
+        }
+        .status {
+            margin: 10px 0;
+            padding: 10px;
+            background: #e9ecef;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .qr-display {
+            margin: 20px 0;
+            text-align: center;
+        }
+        .qr-display img {
+            border: 2px solid #007bff;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 阿瓦隆功能測試</h1>
+    
+    <div class="test-section">
+        <h2>1. 瀏覽器相容性測試</h2>
+        <button class="btn" onclick="testBrowserCompatibility()">測試瀏覽器支援</button>
+        <div id="browserResult"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>2. 相機權限測試</h2>
+        <button class="btn" onclick="testCameraPermission()">測試相機權限</button>
+        <div id="cameraResult"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>3. QR碼生成測試</h2>
+        <button class="btn" onclick="generateTestQR()">生成測試QR碼</button>
+        <div id="qrResult" class="qr-display"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>4. QR碼掃描測試</h2>
+        <button class="btn" onclick="startScanning()">開始掃描</button>
+        <button class="btn" onclick="stopScanning()">停止掃描</button>
+        <div id="scanContainer">
+            <div class="status" id="scanStatus">準備掃描...</div>
+            <video id="scan"></video>
+        </div>
+        <div id="scanResult"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>5. 遊戲功能測試</h2>
+        <button class="btn" onclick="testGameLogic()">測試遊戲邏輯</button>
+        <div id="gameResult"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>6. 主程式掃描測試</h2>
+        <button onclick="testMainAppScanning()" class="test-btn">6. 主程式掃描測試</button>
+        <button onclick="loadSimplePeerManually()" class="test-btn">7. 手動載入 SimplePeer</button>
+        <div id="mainAppResult" class="result-container"></div>
+    </div>
+
+    <!-- 外部庫 -->
+    <script src="https://unpkg.com/simple-peer@9.11.1/simplepeer.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
+
+    <script>
+        let codeReader = null;
+        let isScanning = false;
+
+        // 測試瀏覽器相容性
+        function testBrowserCompatibility() {
+            const result = document.getElementById('browserResult');
+            let html = '';
+
+            // 檢查 getUserMedia 支援
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                html += '<div class="result success">✅ getUserMedia API 支援</div>';
+            } else {
+                html += '<div class="result error">❌ getUserMedia API 不支援</div>';
+            }
+
+            // 檢查 WebRTC 支援
+            if (window.RTCPeerConnection || window.webkitRTCPeerConnection) {
+                html += '<div class="result success">✅ WebRTC 支援</div>';
+            } else {
+                html += '<div class="result error">❌ WebRTC 不支援</div>';
+            }
+
+            // 檢查 QRCode.js
+            if (typeof QRCode !== 'undefined') {
+                html += '<div class="result success">✅ QRCode.js 載入成功</div>';
+            } else {
+                html += '<div class="result error">❌ QRCode.js 載入失敗</div>';
+            }
+
+            // 檢查 ZXing
+            if (typeof ZXing !== 'undefined') {
+                html += '<div class="result success">✅ ZXing 載入成功</div>';
+            } else {
+                html += '<div class="result error">❌ ZXing 載入失敗</div>';
+            }
+
+            // 檢查 LZString
+            if (typeof LZString !== 'undefined') {
+                html += '<div class="result success">✅ LZString 載入成功</div>';
+            } else {
+                html += '<div class="result error">❌ LZString 載入失敗</div>';
+            }
+
+            result.innerHTML = html;
+        }
+
+        // 測試相機權限
+        async function testCameraPermission() {
+            const result = document.getElementById('cameraResult');
+            let html = '';
+
+            try {
+                html += '<div class="result info">正在請求相機權限...</div>';
+                result.innerHTML = html;
+
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: "environment",
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    } 
+                });
+
+                html += '<div class="result success">✅ 相機權限獲得成功</div>';
+                
+                // 檢查相機資訊
+                const videoTrack = stream.getVideoTracks()[0];
+                if (videoTrack) {
+                    const capabilities = videoTrack.getCapabilities();
+                    html += `<div class="result success">✅ 相機: ${videoTrack.label}</div>`;
+                    html += `<div class="result success">✅ 解析度: ${capabilities.width.max}x${capabilities.height.max}</div>`;
+                }
+
+                // 停止測試流
+                stream.getTracks().forEach(track => track.stop());
+                html += '<div class="result success">✅ 相機測試完成</div>';
+
+            } catch (error) {
+                html += `<div class="result error">❌ 相機權限錯誤: ${error.message}</div>`;
+                
+                if (error.name === 'NotAllowedError') {
+                    html += '<div class="result error">💡 請在瀏覽器設定中允許相機權限</div>';
+                } else if (error.name === 'NotFoundError') {
+                    html += '<div class="result error">💡 找不到相機設備</div>';
+                } else if (error.name === 'NotSupportedError') {
+                    html += '<div class="result error">💡 瀏覽器不支援相機功能</div>';
+                }
+            }
+
+            result.innerHTML = html;
+        }
+
+        // 生成測試QR碼
+        function generateTestQR() {
+            const result = document.getElementById('qrResult');
+            
+            // 生成測試資料
+            const testData = {
+                type: 'test',
+                timestamp: Date.now(),
+                message: '這是一個測試QR碼'
+            };
+            
+            const compressed = LZString.compressToBase64(JSON.stringify(testData));
+            
+            // 清除之前的QR碼
+            result.innerHTML = '';
+            
+            // 生成新的QR碼
+            const qr = new QRCode(result, {
+                text: compressed,
+                width: 200,
+                height: 200,
+                colorDark: "#000000",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.L
+            });
+            
+            result.innerHTML += `<div class="result success">✅ 測試QR碼生成成功</div>`;
+            result.innerHTML += `<div class="result info">測試資料: ${compressed.substring(0, 50)}...</div>`;
+        }
+
+        // 開始掃描
+        async function startScanning() {
+            if (isScanning) {
+                return;
+            }
+
+            const statusElement = document.getElementById('scanStatus');
+            const resultElement = document.getElementById('scanResult');
+            const videoElement = document.getElementById('scan');
+            
+            try {
+                isScanning = true;
+                statusElement.textContent = '正在檢查掃描器庫...';
+                resultElement.innerHTML = '';
+
+                // 檢查 ZXing 是否可用
+                if (typeof ZXing === 'undefined') {
+                    throw new Error('ZXing 庫未載入，請檢查網路連接');
+                }
+
+                statusElement.textContent = '正在創建掃描器...';
+                
+                // 創建 ZXing 掃描器實例
+                codeReader = new ZXing.BrowserMultiFormatReader();
+                
+                statusElement.textContent = '正在啟動相機...';
+                
+                // 啟動掃描器
+                await codeReader.decodeFromVideoDevice(
+                    null, // 使用預設相機
+                    videoElement,
+                    (result, error) => {
+                        if (result) {
+                            // 掃描成功
+                            statusElement.textContent = '掃描成功！';
+                            resultElement.innerHTML = `
+                                <div class="result success">
+                                    <strong>掃描結果:</strong><br>
+                                    <pre>${result.getText()}</pre>
+                                </div>
+                            `;
+                            
+                            // 嘗試解析資料
+                            try {
+                                const decompressed = LZString.decompressFromBase64(result.getText());
+                                const parsed = JSON.parse(decompressed);
+                                resultElement.innerHTML += `
+                                    <div class="result success">
+                                        <strong>解析結果:</strong><br>
+                                        <pre>${JSON.stringify(parsed, null, 2)}</pre>
+                                    </div>
+                                `;
+                            } catch (e) {
+                                resultElement.innerHTML += `
+                                    <div class="result error">
+                                        <strong>解析失敗:</strong> ${e.message}
+                                    </div>
+                                `;
+                            }
+                            
+                            stopScanning();
+                        }
+                        
+                        if (error && error.name !== 'NotFoundException') {
+                            // 掃描錯誤（非致命）
+                            statusElement.textContent = '正在掃描，請對準QR碼...';
+                        }
+                    }
+                );
+
+                statusElement.textContent = '掃描器已啟動，請對準QR碼';
+
+            } catch (error) {
+                console.error('掃描器啟動失敗:', error);
+                isScanning = false;
+                statusElement.textContent = '掃描器啟動失敗';
+                resultElement.innerHTML = `
+                    <div class="result error">
+                        <strong>錯誤:</strong> ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        // 停止掃描
+        function stopScanning() {
+            const statusElement = document.getElementById('scanStatus');
+            const videoElement = document.getElementById('scan');
+            
+            if (codeReader && isScanning) {
+                codeReader.reset();
+            }
+            
+            // 停止相機流
+            if (videoElement.srcObject) {
+                const stream = videoElement.srcObject;
+                stream.getTracks().forEach(track => track.stop());
+                videoElement.srcObject = null;
+            }
+            
+            isScanning = false;
+            statusElement.textContent = '掃描已停止';
+        }
+
+        // 測試遊戲邏輯
+        function testGameLogic() {
+            const result = document.getElementById('gameResult');
+            let html = '';
+
+            // 測試 LZString 壓縮/解壓縮
+            const testData = { player: "測試玩家", role: "Merlin" };
+            const compressed = LZString.compressToBase64(JSON.stringify(testData));
+            const decompressed = LZString.decompressFromBase64(compressed);
+            const parsed = JSON.parse(decompressed);
+
+            if (parsed.player === testData.player && parsed.role === testData.role) {
+                html += '<div class="result success">✅ LZString 壓縮/解壓縮測試通過</div>';
+            } else {
+                html += '<div class="result error">❌ LZString 壓縮/解壓縮測試失敗</div>';
+            }
+
+            // 測試 QRCode 生成
+            try {
+                const qr = new QRCode(document.createElement('div'), {
+                    text: compressed,
+                    width: 100,
+                    height: 100
+                });
+                html += '<div class="result success">✅ QRCode 生成測試通過</div>';
+            } catch (error) {
+                html += '<div class="result error">❌ QRCode 生成測試失敗</div>';
+            }
+
+            result.innerHTML = html;
+        }
+
+        // 測試主程式掃描功能
+        function testMainAppScanning() {
+            const result = document.getElementById('mainAppResult');
+            let html = '';
+
+            // 檢查必要的庫
+            if (typeof ZXing === 'undefined') {
+                html += '<div class="result error">❌ ZXing 庫未載入</div>';
+            } else {
+                html += '<div class="result success">✅ ZXing 庫已載入</div>';
+            }
+
+            if (typeof QRCode === 'undefined') {
+                html += '<div class="result error">❌ QRCode.js 庫未載入</div>';
+            } else {
+                html += '<div class="result success">✅ QRCode.js 庫已載入</div>';
+            }
+
+            if (typeof LZString === 'undefined') {
+                html += '<div class="result error">❌ LZString 庫未載入</div>';
+            } else {
+                html += '<div class="result success">✅ LZString 庫已載入</div>';
+            }
+
+            if (typeof SimplePeer === 'undefined') {
+                html += '<div class="result error">❌ SimplePeer 庫未載入</div>';
+                html += '<div class="result info">💡 解決方案：</div>';
+                html += '<div class="result info">1. 檢查網路連接</div>';
+                html += '<div class="result info">2. 重新載入頁面</div>';
+                html += '<div class="result info">3. 嘗試使用不同的CDN</div>';
+                html += '<div class="result info">4. 檢查瀏覽器控制台是否有錯誤</div>';
+            } else {
+                html += '<div class="result success">✅ SimplePeer 庫已載入</div>';
+                
+                // 測試 SimplePeer 功能
+                try {
+                    const peer = new SimplePeer({ initiator: true, trickle: false });
+                    html += '<div class="result success">✅ SimplePeer 實例創建成功</div>';
+                    
+                    // 測試 signal 事件
+                    let signalReceived = false;
+                    peer.on('signal', () => {
+                        signalReceived = true;
+                    });
+                    
+                    setTimeout(() => {
+                        if (signalReceived) {
+                            html += '<div class="result success">✅ SimplePeer signal 事件正常</div>';
+                        } else {
+                            html += '<div class="result error">❌ SimplePeer signal 事件異常</div>';
+                        }
+                        result.innerHTML = html;
+                    }, 1000);
+                    
+                } catch (error) {
+                    html += `<div class="result error">❌ SimplePeer 實例創建失敗: ${error.message}</div>`;
+                }
+            }
+
+            // 測試 ZXing 掃描器創建
+            try {
+                const codeReader = new ZXing.BrowserMultiFormatReader();
+                html += '<div class="result success">✅ ZXing 掃描器創建成功</div>';
+            } catch (error) {
+                html += `<div class="result error">❌ ZXing 掃描器創建失敗: ${error.message}</div>`;
+            }
+
+            // 測試 QRCode 生成器創建
+            try {
+                const qr = new QRCode(document.createElement('div'), {
+                    text: 'test',
+                    width: 100,
+                    height: 100
+                });
+                html += '<div class="result success">✅ QRCode 生成器創建成功</div>';
+            } catch (error) {
+                html += `<div class="result error">❌ QRCode 生成器創建失敗: ${error.message}</div>`;
+            }
+
+            result.innerHTML = html;
+        }
+
+        // 手動載入 SimplePeer
+        function loadSimplePeerManually() {
+            const result = document.getElementById('mainAppResult');
+            result.innerHTML = '<div class="result info">🔄 正在手動載入 SimplePeer...</div>';
+
+            // 嘗試不同的 CDN
+            const cdnUrls = [
+                'https://unpkg.com/simple-peer@9.11.1/simplepeer.min.js',
+                'https://cdnjs.cloudflare.com/ajax/libs/simple-peer/9.11.1/simplepeer.min.js',
+                'https://cdn.jsdelivr.net/npm/simple-peer@9.11.1/simplepeer.min.js'
+            ];
+
+            function tryLoadCDN(index) {
+                if (index >= cdnUrls.length) {
+                    result.innerHTML = '<div class="result error">❌ 所有 CDN 都載入失敗</div>';
+                    return;
+                }
+
+                const script = document.createElement('script');
+                script.src = cdnUrls[index];
+                script.onload = () => {
+                    result.innerHTML = '<div class="result success">✅ SimplePeer 載入成功！</div>';
+                    setTimeout(() => {
+                        testMainAppScanning();
+                    }, 500);
+                };
+                script.onerror = () => {
+                    console.log(`CDN ${index + 1} 載入失敗，嘗試下一個...`);
+                    tryLoadCDN(index + 1);
+                };
+                document.head.appendChild(script);
+            }
+
+            tryLoadCDN(0);
+        }
+
+        // 頁面載入時自動執行基本測試
+        window.onload = function() {
+            console.log('阿瓦隆功能測試工具已載入');
+            testBrowserCompatibility();
+        };
+
+        // 頁面卸載時清理資源
+        window.onbeforeunload = function() {
+            stopScanning();
+        };
+    </script>
+</body>
+</html> 
