@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>阿瓦隆 - UI測試</title>
+    <link rel="stylesheet" href="style.css?v=1.0.18">
+</head>
+<body>
+    <div class="container">
+        <h1>🏰 阿瓦隆 - UI測試</h1>
+        
+        <!-- 測試按鈕 -->
+        <div style="text-align: center; margin: 20px 0;">
+            <button onclick="showRoom()" class="btn">顯示房間區域</button>
+            <button onclick="showGame()" class="btn">顯示遊戲操作區域</button>
+            <button onclick="showView()" class="btn">顯示遊戲查看區域</button>
+            <button onclick="showMain()" class="btn">顯示主選單</button>
+        </div>
+
+        <!-- 主選單 -->
+        <div id="mainMenu">
+            <div class="button-group">
+                <button class="btn" id="btnHost">🏠 創建房間</button>
+                <button class="btn btn-secondary" id="btnJoin">🔗 加入房間</button>
+            </div>
+        </div>
+
+        <!-- 房間區域 -->
+        <div id="roomArea" class="room-area hidden">
+            <div class="room-header">
+                <h2>🏰 遊戲房間</h2>
+                <div id="roomStatus" class="room-status">等待玩家加入... (3/5)</div>
+            </div>
+            
+            <!-- 房主專用按鈕 -->
+            <div id="hostControls" class="host-controls">
+                <button id="btnAddPlayer" class="btn btn-secondary">👥 加入玩家</button>
+                <button id="btnStartGame" class="btn">🎮 開始遊戲</button>
+            </div>
+            
+            <!-- 玩家列表 -->
+            <div class="room-players">
+                <h3>房間成員</h3>
+                <div id="roomPlayerList" class="room-player-list">
+                    <div class="room-player-item">
+                        <div class="room-player-avatar">房</div>
+                        <div class="room-player-name">房主</div>
+                        <div class="room-player-status">準備</div>
+                    </div>
+                    <div class="room-player-item">
+                        <div class="room-player-avatar">玩</div>
+                        <div class="room-player-name">玩家1</div>
+                        <div class="room-player-status">準備</div>
+                    </div>
+                    <div class="room-player-item">
+                        <div class="room-player-avatar">家</div>
+                        <div class="room-player-name">玩家2</div>
+                        <div class="room-player-status">等待</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 聊天區域 -->
+            <div class="room-chat">
+                <h3>房間聊天</h3>
+                <div id="roomChatMessages" class="chat-messages">
+                    <div class="chat-message">系統: 歡迎來到阿瓦隆遊戲！</div>
+                    <div class="chat-message">房主: 大家好！</div>
+                    <div class="chat-message">玩家1: 你好！</div>
+                </div>
+                <div class="chat-input">
+                    <input type="text" id="roomChatInput" placeholder="輸入訊息..." maxlength="100">
+                    <button id="btnSendMessage" class="btn btn-small">發送</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 遊戲操作區域 -->
+        <div id="gameOperationArea" class="game-operation-area hidden">
+            <div class="game-header">
+                <h2>🎯 遊戲進行中</h2>
+                <div id="gamePhase" class="game-phase">組隊階段</div>
+            </div>
+            
+            <!-- 玩家頭像區域 -->
+            <div class="player-avatars">
+                <div class="left-players" id="leftPlayers">
+                    <div class="player-avatar">
+                        房
+                        <div class="player-number">1</div>
+                    </div>
+                    <div class="player-avatar">
+                        玩
+                        <div class="player-number">2</div>
+                    </div>
+                    <div class="player-avatar evil">
+                        家
+                        <div class="player-number">3</div>
+                    </div>
+                </div>
+                <div class="center-game" id="centerGame">
+                    <div class="game-message" id="gameMessage">
+                        <h3>當前階段</h3>
+                        <p id="currentPhaseText">第1輪任務 - 選擇2名成員</p>
+                    </div>
+                    <div class="game-actions" id="gameActions">
+                        <button class="btn">選擇成員</button>
+                        <button class="btn btn-secondary">跳過發言</button>
+                    </div>
+                </div>
+                <div class="right-players" id="rightPlayers">
+                    <div class="player-avatar">
+                        四
+                        <div class="player-number">4</div>
+                    </div>
+                    <div class="player-avatar">
+                        五
+                        <div class="player-number">5</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 底部按鈕 -->
+            <div class="game-bottom">
+                <button id="btnViewGame" class="btn btn-secondary">📊 查看遊戲</button>
+            </div>
+        </div>
+
+        <!-- 遊戲查看區域 -->
+        <div id="gameViewArea" class="game-view-area hidden">
+            <div class="view-header">
+                <h2>📊 遊戲統計</h2>
+                <button id="btnBackToGame" class="btn btn-secondary">← 返回遊戲</button>
+            </div>
+            
+            <!-- 遊戲統計表格 -->
+            <div class="game-stats">
+                <div class="stats-section">
+                    <h3>任務進度</h3>
+                    <div id="missionStats" class="stats-table">
+                        <div class="stats-row stats-header mission-row">
+                            <div>任務</div>
+                            <div>結果</div>
+                            <div>成員</div>
+                        </div>
+                        <div class="stats-row mission-row">
+                            <div>第1輪</div>
+                            <div>✅ 成功</div>
+                            <div>2人</div>
+                        </div>
+                        <div class="stats-row mission-row">
+                            <div>第2輪</div>
+                            <div>❌ 失敗</div>
+                            <div>3人</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="stats-section">
+                    <h3>投票記錄</h3>
+                    <div id="voteStats" class="stats-table">
+                        <div class="stats-row stats-header vote-row">
+                            <div>任務</div>
+                            <div>贊成</div>
+                            <div>反對</div>
+                            <div>結果</div>
+                        </div>
+                        <div class="stats-row vote-row">
+                            <div>第1輪</div>
+                            <div>2</div>
+                            <div>0</div>
+                            <div>成功</div>
+                        </div>
+                        <div class="stats-row vote-row">
+                            <div>第2輪</div>
+                            <div>1</div>
+                            <div>2</div>
+                            <div>失敗</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="stats-section">
+                    <h3>玩家狀態</h3>
+                    <div id="playerStats" class="stats-table">
+                        <div class="stats-row stats-header player-row">
+                            <div>玩家</div>
+                            <div>角色</div>
+                            <div>陣營</div>
+                            <div>狀態</div>
+                        </div>
+                        <div class="stats-row player-row">
+                            <div>房主</div>
+                            <div>梅林</div>
+                            <div>好人</div>
+                            <div>準備</div>
+                        </div>
+                        <div class="stats-row player-row">
+                            <div>玩家1</div>
+                            <div>派西維爾</div>
+                            <div>好人</div>
+                            <div>準備</div>
+                        </div>
+                        <div class="stats-row player-row">
+                            <div>玩家2</div>
+                            <div>刺客</div>
+                            <div>壞人</div>
+                            <div>準備</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showRoom() {
+            hideAll();
+            document.getElementById('roomArea').classList.remove('hidden');
+        }
+        
+        function showGame() {
+            hideAll();
+            document.getElementById('gameOperationArea').classList.remove('hidden');
+        }
+        
+        function showView() {
+            hideAll();
+            document.getElementById('gameViewArea').classList.remove('hidden');
+        }
+        
+        function showMain() {
+            hideAll();
+            document.getElementById('mainMenu').classList.remove('hidden');
+        }
+        
+        function hideAll() {
+            document.getElementById('mainMenu').classList.add('hidden');
+            document.getElementById('roomArea').classList.add('hidden');
+            document.getElementById('gameOperationArea').classList.add('hidden');
+            document.getElementById('gameViewArea').classList.add('hidden');
+        }
+    </script>
+</body>
+</html> 

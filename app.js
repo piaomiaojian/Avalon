@@ -69,6 +69,50 @@ class UIController {
                 this.showElement('qrContainer');
             });
         }
+
+        // 返回房間按鈕
+        const btnBackToRoom = document.getElementById('btnBackToRoom');
+        if (btnBackToRoom) {
+            btnBackToRoom.addEventListener('click', () => {
+                this.hideElement('qrContainer');
+                this.showRoomArea();
+            });
+        }
+
+        // 房間區域按鈕
+        const btnAddPlayer = document.getElementById('btnAddPlayer');
+        if (btnAddPlayer) {
+            btnAddPlayer.addEventListener('click', () => this.startHostScanning());
+        }
+
+        const btnStartGame = document.getElementById('btnStartGame');
+        if (btnStartGame) {
+            btnStartGame.addEventListener('click', () => this.startGame());
+        }
+
+        // 遊戲操作區域按鈕
+        const btnViewGame = document.getElementById('btnViewGame');
+        if (btnViewGame) {
+            btnViewGame.addEventListener('click', () => this.showGameView());
+        }
+
+        // 遊戲查看區域按鈕
+        const btnBackToGame = document.getElementById('btnBackToGame');
+        if (btnBackToGame) {
+            btnBackToGame.addEventListener('click', () => this.showGameOperation());
+        }
+
+        // 房間聊天
+        const btnSendMessage = document.getElementById('btnSendMessage');
+        const roomChatInput = document.getElementById('roomChatInput');
+        if (btnSendMessage && roomChatInput) {
+            btnSendMessage.addEventListener('click', () => this.sendRoomMessage());
+            roomChatInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    this.sendRoomMessage();
+                }
+            });
+        }
     }
 
     setupQRCode() {
@@ -85,18 +129,25 @@ class UIController {
         // 遊戲事件處理
         this.game.onGameEvent('playerJoined', (data) => {
             this.addChatMessage(`${data.player.name} 加入了遊戲`);
+            this.addRoomMessage(`${data.player.name} 加入了房間`);
+            this.updateRoomStatus();
+            this.updateRoomPlayerList();
         });
 
         this.game.onGameEvent('rolesAssigned', (data) => {
             this.addChatMessage('角色分配完成！');
+            this.addRoomMessage('遊戲開始！角色分配完成');
+            this.showGameOperationArea();
         });
 
         this.game.onGameEvent('missionStarted', (data) => {
             this.addChatMessage(`第${data.missionNumber}輪任務開始，需要${data.missionSize}名成員`);
+            this.updateGamePhase();
         });
 
         this.game.onGameEvent('votingStarted', (data) => {
             this.addChatMessage('開始投票！');
+            this.updateGamePhase();
         });
 
         this.game.onGameEvent('voteReceived', (data) => {
@@ -105,15 +156,18 @@ class UIController {
 
         this.game.onGameEvent('missionCompleted', (data) => {
             this.addChatMessage(`第${data.missionNumber}輪任務: ${data.success ? '成功' : '失敗'}`);
+            this.updateGamePhase();
         });
 
         this.game.onGameEvent('gameEnded', (data) => {
             this.addChatMessage(`遊戲結束！${data.winner === 'good' ? '好人' : '壞人'}獲勝！`);
+            this.addRoomMessage(`遊戲結束！${data.winner === 'good' ? '好人' : '壞人'}獲勝！`);
         });
 
         this.game.onGameEvent('assassinationCompleted', (data) => {
             const result = data.assassinWins ? '刺客成功刺殺梅林！壞人最終獲勝！' : '刺客刺殺失敗！好人最終獲勝！';
             this.addChatMessage(result);
+            this.addRoomMessage(result);
         });
     }
 
@@ -121,7 +175,7 @@ class UIController {
     async createRoom() {
         this.transport.setHostStatus(true);
         this.hideElement('mainMenu');
-        this.showElement('qrContainer');
+        this.showRoomArea();
         
         try {
             // 檢查SimplePeer是否可用
@@ -167,12 +221,12 @@ class UIController {
                 console.log('最終信令狀態:', this.hostPeer.signalingState);
                 console.log('最終連接狀態:', this.hostPeer.connectionState);
                 this.addChatMessage('玩家已連接');
-                // 連接建立後，停止掃描並進入遊戲大廳
+                this.addRoomMessage('玩家已連接');
+                // 連接建立後，停止掃描並返回房間區域
                 this.stopScanning();
                 this.hideElement('qrContainer');
                 this.hideElement('scanContainer');
-                this.showElement('gameArea');
-                document.getElementById('status').textContent = '等待更多玩家加入...';
+                this.showRoomArea();
             });
             
         } catch (error) {
@@ -180,34 +234,16 @@ class UIController {
             this.logError('創建房間錯誤', `創建房間失敗: ${error.message}`, error.stack);
             // 顯示錯誤信息給用戶
             this.showElement('mainMenu');
-            this.hideElement('qrContainer');
-        }
-
-        // 房主也需要掃描功能來接收加入者的answer
-        // 在QR碼下方添加掃描按鈕
-        const qrContainer = document.getElementById('qrContainer');
-        const existingScanButton = qrContainer.querySelector('.host-scan-button');
-        if (!existingScanButton) {
-            const scanButton = document.createElement('button');
-            scanButton.className = 'btn btn-secondary host-scan-button';
-            scanButton.textContent = '📱 掃描玩家QR碼';
-            scanButton.style.marginTop = '20px';
-            scanButton.addEventListener('click', () => {
-                this.startHostScanning();
-            });
-            qrContainer.appendChild(scanButton);
+            this.hideElement('roomArea');
         }
     }
 
     // 房主掃描功能
     async startHostScanning() {
         console.log('房主開始掃描');
-        this.hideElement('qrContainer');
-        this.showElement('scanContainer');
-        document.getElementById('scanStatus').textContent = '房主掃描模式 - 請掃描玩家的連接QR碼';
-        
-        // 顯示返回按鈕
-        document.getElementById('btnBackToQR').style.display = 'inline-block';
+        this.hideElement('roomArea');
+        this.showElement('qrContainer');
+        document.getElementById('qrTitle').textContent = '請讓其他玩家掃描此QR碼加入';
         
         // 重新綁定重試按鈕
         document.getElementById('retryScan').addEventListener('click', () => {
@@ -662,7 +698,7 @@ class UIController {
             console.log('連接建立時的連接狀態:', peer.connectionState);
             this.addChatMessage('WebRTC連接已建立');
             
-            // 連接建立後，停止掃描並進入遊戲大廳
+            // 連接建立後，停止掃描並進入房間區域
             console.log('開始UI切換...');
             this.stopScanning();
             console.log('掃描已停止');
@@ -673,14 +709,9 @@ class UIController {
             this.hideElement('scanContainer');
             console.log('掃描容器已隱藏');
             
-            this.showElement('gameArea');
-            console.log('遊戲區域已顯示');
-            
-            // 檢查gameArea是否真的顯示了
-            const gameArea = document.getElementById('gameArea');
-            console.log('gameArea元素:', gameArea);
-            console.log('gameArea的classList:', gameArea.classList.toString());
-            console.log('gameArea的display樣式:', window.getComputedStyle(gameArea).display);
+            // 顯示房間區域而不是遊戲區域
+            this.showRoomArea();
+            console.log('房間區域已顯示');
             
             // 加入者通知房主已加入
             if (!this.transport.isHostPlayer()) {
@@ -1014,6 +1045,323 @@ class UIController {
         errorMessages.innerHTML = '';
         document.getElementById('errorContainer').classList.add('hidden');
     }
+
+    // 顯示房間區域
+    showRoomArea() {
+        this.hideAllAreas();
+        this.showElement('roomArea');
+        
+        // 如果是房主，顯示房主控制按鈕
+        if (this.transport.isHostPlayer()) {
+            this.showElement('hostControls');
+            
+            // 檢查人數是否支援，如果不支援則隱藏開始遊戲按鈕
+            const gameState = this.game.getGameState();
+            const btnStartGame = document.getElementById('btnStartGame');
+            if (btnStartGame) {
+                if (gameState.isSupported) {
+                    btnStartGame.style.display = 'inline-block';
+                } else {
+                    btnStartGame.style.display = 'none';
+                }
+            }
+        } else {
+            this.hideElement('hostControls');
+        }
+        
+        // 更新房間狀態和玩家列表
+        this.updateRoomStatus();
+        this.updateRoomPlayerList();
+    }
+
+    // 顯示遊戲操作區域
+    showGameOperationArea() {
+        this.hideAllAreas();
+        this.showElement('gameOperationArea');
+        this.setupGameOperationUI();
+    }
+
+    // 顯示遊戲查看區域
+    showGameViewArea() {
+        this.hideAllAreas();
+        this.showElement('gameViewArea');
+        this.updateGameStats();
+    }
+
+    // 隱藏所有區域
+    hideAllAreas() {
+        this.hideElement('mainMenu');
+        this.hideElement('qrContainer');
+        this.hideElement('scanContainer');
+        this.hideElement('gameArea');
+        this.hideElement('roomArea');
+        this.hideElement('gameOperationArea');
+        this.hideElement('gameViewArea');
+    }
+
+    // 更新房間狀態
+    updateRoomStatus() {
+        const roomStatus = document.getElementById('roomStatus');
+        let playerCount = this.transport.getConnectedPlayerCount();
+        
+        // 如果是房主，加上房主自己
+        if (this.transport.isHostPlayer()) {
+            playerCount += 1;
+        }
+        
+        const supportedPlayerCounts = [5, 6, 7, 8, 9, 10];
+        const isSupported = supportedPlayerCounts.includes(playerCount);
+        
+        if (playerCount < 5) {
+            roomStatus.textContent = `等待玩家加入... (${playerCount}/5)`;
+        } else if (playerCount > 10) {
+            roomStatus.textContent = `房間已滿 (${playerCount}/10)`;
+        } else if (isSupported) {
+            roomStatus.textContent = `準備開始遊戲 (${playerCount}/10)`;
+        } else {
+            roomStatus.textContent = `人數不支援 (${playerCount}人，需要5-10人)`;
+        }
+        
+        // 如果是房主，更新開始遊戲按鈕的顯示
+        if (this.transport.isHostPlayer()) {
+            const btnStartGame = document.getElementById('btnStartGame');
+            if (btnStartGame) {
+                if (isSupported) {
+                    btnStartGame.style.display = 'inline-block';
+                } else {
+                    btnStartGame.style.display = 'none';
+                }
+            }
+        }
+    }
+
+    // 設置遊戲操作UI
+    setupGameOperationUI() {
+        this.updatePlayerAvatars();
+        this.updateGamePhase();
+    }
+
+    // 更新玩家頭像
+    updatePlayerAvatars() {
+        const leftPlayers = document.getElementById('leftPlayers');
+        const rightPlayers = document.getElementById('rightPlayers');
+        
+        leftPlayers.innerHTML = '';
+        rightPlayers.innerHTML = '';
+        
+        // 獲取包含房主的完整玩家列表
+        const gameState = this.game.getGameState();
+        const allPlayers = gameState.players || [];
+        
+        allPlayers.forEach((player, index) => {
+            const avatar = this.createPlayerAvatar(player, index + 1);
+            
+            // 分配玩家到左右兩側
+            if (index < Math.ceil(allPlayers.length / 2)) {
+                leftPlayers.appendChild(avatar);
+            } else {
+                rightPlayers.appendChild(avatar);
+            }
+        });
+    }
+
+    // 創建玩家頭像
+    createPlayerAvatar(player, number) {
+        const avatar = document.createElement('div');
+        avatar.className = 'player-avatar';
+        avatar.textContent = player.name.charAt(0).toUpperCase();
+        
+        // 添加玩家編號
+        const numberDiv = document.createElement('div');
+        numberDiv.className = 'player-number';
+        numberDiv.textContent = number;
+        avatar.appendChild(numberDiv);
+        
+        // 如果是壞人且當前玩家是梅林，顯示紅點
+        if (this.myRole && this.myRole.role === 'Merlin' && !player.isGood) {
+            avatar.classList.add('evil');
+        }
+        
+        return avatar;
+    }
+
+    // 更新遊戲階段
+    updateGamePhase() {
+        const gamePhase = document.getElementById('gamePhase');
+        const currentPhaseText = document.getElementById('currentPhaseText');
+        
+        const gameState = this.game.getGameState();
+        
+        switch (gameState.state) {
+            case 'MISSION_SELECTION':
+                gamePhase.textContent = '組隊階段';
+                const missionSize = this.game.getMissionSize ? this.game.getMissionSize(gameState.currentMission, gameState.players.length) : 2;
+                currentPhaseText.textContent = `第${gameState.currentMission}輪任務 - 選擇${missionSize}名成員`;
+                break;
+            case 'MISSION_VOTE':
+                gamePhase.textContent = '投票階段';
+                currentPhaseText.textContent = '請對任務成員進行投票';
+                break;
+            case 'MISSION_EXECUTION':
+                gamePhase.textContent = '執行階段';
+                currentPhaseText.textContent = '任務執行中...';
+                break;
+            default:
+                gamePhase.textContent = '遊戲進行中';
+                currentPhaseText.textContent = '等待遊戲開始...';
+        }
+    }
+
+    // 更新遊戲統計
+    updateGameStats() {
+        this.updateMissionStats();
+        this.updateVoteStats();
+        this.updatePlayerStats();
+    }
+
+    // 更新任務統計
+    updateMissionStats() {
+        const missionStats = document.getElementById('missionStats');
+        const gameState = this.game.getGameState();
+        
+        let html = '<div class="stats-row stats-header mission-row">';
+        html += '<div>任務</div><div>結果</div><div>成員</div>';
+        html += '</div>';
+        
+        gameState.missionResults.forEach((result, index) => {
+            html += '<div class="stats-row mission-row">';
+            html += `<div>第${index + 1}輪</div>`;
+            html += `<div>${result.success ? '✅ 成功' : '❌ 失敗'}</div>`;
+            html += `<div>${result.votes.length}人</div>`;
+            html += '</div>';
+        });
+        
+        missionStats.innerHTML = html;
+    }
+
+    // 更新投票統計
+    updateVoteStats() {
+        const voteStats = document.getElementById('voteStats');
+        const gameState = this.game.getGameState();
+        
+        let html = '<div class="stats-row stats-header vote-row">';
+        html += '<div>任務</div><div>贊成</div><div>反對</div><div>結果</div>';
+        html += '</div>';
+        
+        gameState.missionResults.forEach((result, index) => {
+            const successVotes = result.votes.filter(v => v.vote).length;
+            const failVotes = result.votes.filter(v => !v.vote).length;
+            
+            html += '<div class="stats-row vote-row">';
+            html += `<div>第${index + 1}輪</div>`;
+            html += `<div>${successVotes}</div>`;
+            html += `<div>${failVotes}</div>`;
+            html += `<div>${result.success ? '成功' : '失敗'}</div>`;
+            html += '</div>';
+        });
+        
+        voteStats.innerHTML = html;
+    }
+
+    // 更新玩家統計
+    updatePlayerStats() {
+        const playerStats = document.getElementById('playerStats');
+        const gameState = this.game.getGameState();
+        
+        let html = '<div class="stats-row stats-header player-row">';
+        html += '<div>玩家</div><div>角色</div><div>陣營</div><div>狀態</div>';
+        html += '</div>';
+        
+        gameState.players.forEach((player, index) => {
+            const role = gameState.roles.find(r => r.playerId === player.id);
+            
+            html += '<div class="stats-row player-row">';
+            html += `<div>${player.name}</div>`;
+            html += `<div>${role ? this.getRoleName(role.role) : '未知'}</div>`;
+            html += `<div>${role ? (role.isGood ? '好人' : '壞人') : '未知'}</div>`;
+            html += `<div>${player.ready ? '準備' : '等待'}</div>`;
+            html += '</div>';
+        });
+        
+        playerStats.innerHTML = html;
+    }
+
+    // 開始遊戲
+    startGame() {
+        if (this.transport.isHostPlayer()) {
+            // 檢查人數是否支援
+            const gameState = this.game.getGameState();
+            if (!gameState.isSupported) {
+                alert(`不支援 ${gameState.players.length} 人遊戲，需要 5-10 人`);
+                return;
+            }
+            
+            this.transport.send({
+                type: 'game_action',
+                action: 'start_game'
+            });
+            this.showGameOperationArea();
+        }
+    }
+
+    // 發送房間訊息
+    sendRoomMessage() {
+        const input = document.getElementById('roomChatInput');
+        const message = input.value.trim();
+        
+        if (message) {
+            this.addRoomMessage(`我: ${message}`);
+            this.transport.send({
+                type: 'room_message',
+                playerId: this.transport.getCurrentPlayerId(),
+                message: message
+            });
+            input.value = '';
+        }
+    }
+
+    // 添加房間訊息
+    addRoomMessage(message) {
+        const chatMessages = document.getElementById('roomChatMessages');
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'chat-message';
+        messageDiv.textContent = message;
+        chatMessages.appendChild(messageDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    // 更新房間玩家列表
+    updateRoomPlayerList() {
+        const roomPlayerList = document.getElementById('roomPlayerList');
+        const gameState = this.game.getGameState();
+        const players = gameState.players || [];
+        
+        roomPlayerList.innerHTML = '';
+        
+        // 顯示所有玩家（包括房主）
+        players.forEach((player, index) => {
+            const playerItem = document.createElement('div');
+            playerItem.className = 'room-player-item';
+            
+            playerItem.innerHTML = `
+                <div class="room-player-avatar">${player.name.charAt(0).toUpperCase()}</div>
+                <div class="room-player-name">${player.name}</div>
+                <div class="room-player-status">${player.ready ? '準備' : '等待'}</div>
+            `;
+            
+            roomPlayerList.appendChild(playerItem);
+        });
+    }
+
+    // 顯示遊戲查看區域
+    showGameView() {
+        this.showGameViewArea();
+    }
+
+    // 顯示遊戲操作區域
+    showGameOperation() {
+        this.showGameOperationArea();
+    }
 }
 
 // ==================== 初始化 ====================
@@ -1088,6 +1436,11 @@ function initializeGame() {
         transport.onMessage('assassination_result', (msg) => {
             const result = msg.assassinWins ? '刺客成功刺殺梅林！壞人最終獲勝！' : '刺客刺殺失敗！好人最終獲勝！';
             window.ui.addChatMessage(result);
+        });
+        
+        transport.onMessage('room_message', (msg) => {
+            const senderName = msg.playerName || `玩家${msg.playerId.substr(-4)}`;
+            window.ui.addRoomMessage(`${senderName}: ${msg.message}`);
         });
         
         console.log('阿瓦隆遊戲初始化完成');

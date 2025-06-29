@@ -4,11 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>阿瓦隆 - 手機版</title>
-    <link rel="stylesheet" href="style.css?v=1.0.17">
+    <link rel="stylesheet" href="style.css?v=1.0.20">
 </head>
 <body>
     <div class="container">
-        <h1>🏰 阿瓦隆 - 1.0.17</h1>
+        <h1>🏰 阿瓦隆 - 1.0.20</h1>
         
         <!-- 主選單 -->
         <div id="mainMenu">
@@ -25,6 +25,7 @@
             <br>
             <div id="qr"></div>
             <div id="qrText" class="qr-text"></div>
+            <button id="btnBackToRoom" class="btn btn-secondary" style="margin-top: 20px;">← 返回房間</button>
         </div>
 
         <!-- 掃描區域 -->
@@ -50,6 +51,36 @@
             </div>
             <button id="retryScan" class="btn" style="margin-top: 10px; display: none;">重新掃描</button>
             <button id="btnBackToQR" class="btn btn-secondary" style="margin-top: 10px; display: none;">返回QR碼</button>
+        </div>
+
+        <!-- 房間區域 -->
+        <div id="roomArea" class="room-area hidden">
+            <div class="room-header">
+                <h2>🏰 遊戲房間</h2>
+                <div id="roomStatus" class="room-status">等待玩家加入...</div>
+            </div>
+            
+            <!-- 房主專用按鈕 -->
+            <div id="hostControls" class="host-controls hidden">
+                <button id="btnAddPlayer" class="btn btn-secondary">👥 加入玩家</button>
+                <button id="btnStartGame" class="btn">🎮 開始遊戲</button>
+            </div>
+            
+            <!-- 玩家列表 -->
+            <div class="room-players">
+                <h3>房間成員</h3>
+                <div id="roomPlayerList" class="room-player-list"></div>
+            </div>
+            
+            <!-- 聊天區域 -->
+            <div class="room-chat">
+                <h3>房間聊天</h3>
+                <div id="roomChatMessages" class="chat-messages"></div>
+                <div class="chat-input">
+                    <input type="text" id="roomChatInput" placeholder="輸入訊息..." maxlength="100">
+                    <button id="btnSendMessage" class="btn btn-small">發送</button>
+                </div>
+            </div>
         </div>
 
         <!-- 遊戲區域 -->
@@ -82,11 +113,56 @@
             </div>
         </div>
 
-        <!-- 錯誤顯示區域 -->
-        <div id="errorContainer" class="error-container hidden">
-            <h3>⚠️ 錯誤訊息</h3>
-            <div id="errorMessages"></div>
-            <button id="clearErrors" class="btn btn-secondary">清除錯誤</button>
+        <!-- 遊戲操作區域 -->
+        <div id="gameOperationArea" class="game-operation-area hidden">
+            <div class="game-header">
+                <h2>🎯 遊戲進行中</h2>
+                <div id="gamePhase" class="game-phase">組隊階段</div>
+            </div>
+            
+            <!-- 玩家頭像區域 -->
+            <div class="player-avatars">
+                <div class="left-players" id="leftPlayers"></div>
+                <div class="center-game" id="centerGame">
+                    <div class="game-message" id="gameMessage">
+                        <h3>當前階段</h3>
+                        <p id="currentPhaseText">請選擇任務成員</p>
+                    </div>
+                    <div class="game-actions" id="gameActions"></div>
+                </div>
+                <div class="right-players" id="rightPlayers"></div>
+            </div>
+            
+            <!-- 底部按鈕 -->
+            <div class="game-bottom">
+                <button id="btnViewGame" class="btn btn-secondary">📊 查看遊戲</button>
+            </div>
+        </div>
+
+        <!-- 遊戲查看區域 -->
+        <div id="gameViewArea" class="game-view-area hidden">
+            <div class="view-header">
+                <h2>📊 遊戲統計</h2>
+                <button id="btnBackToGame" class="btn btn-secondary">← 返回遊戲</button>
+            </div>
+            
+            <!-- 遊戲統計表格 -->
+            <div class="game-stats">
+                <div class="stats-section">
+                    <h3>任務進度</h3>
+                    <div id="missionStats" class="stats-table"></div>
+                </div>
+                
+                <div class="stats-section">
+                    <h3>投票記錄</h3>
+                    <div id="voteStats" class="stats-table"></div>
+                </div>
+                
+                <div class="stats-section">
+                    <h3>玩家狀態</h3>
+                    <div id="playerStats" class="stats-table"></div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -97,8 +173,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
 
     <!-- 遊戲腳本 -->
-    <script src="transport.js?v=1.0.17"></script>
-    <script src="game.js?v=1.0.17"></script>
-    <script src="app.js?v=1.0.17"></script>
+    <script src="transport.js?v=1.0.20"></script>
+    <script src="game.js?v=1.0.20"></script>
+    <script src="app.js?v=1.0.20"></script>
 </body>
 </html> 

@@ -35,6 +35,7 @@ class AvalonGame {
         this.transport.onMessage('mission_vote', (msg) => this.handleMissionVote(msg));
         this.transport.onMessage('game_action', (msg) => this.handleGameAction(msg));
         this.transport.onMessage('player_ready', (msg) => this.handlePlayerReady(msg));
+        this.transport.onMessage('room_message', (msg) => this.handleRoomMessage(msg));
     }
 
     // 角色配置
@@ -65,10 +66,35 @@ class AvalonGame {
 
     // 分配角色
     assignRoles() {
-        const config = this.getRoleConfig(this.players.length);
+        // 確保房主也在玩家列表中
+        const allPlayers = [...this.players];
+        if (this.transport.isHostPlayer()) {
+            // 如果房主不在玩家列表中，添加房主
+            const hostPlayer = {
+                id: this.transport.getCurrentPlayerId(),
+                name: '房主',
+                ready: true
+            };
+            if (!allPlayers.find(p => p.id === hostPlayer.id)) {
+                allPlayers.unshift(hostPlayer); // 房主放在第一位
+            }
+        }
+        
+        // 檢查人數是否支援
+        const supportedPlayerCounts = [5, 6, 7, 8, 9, 10];
+        if (!supportedPlayerCounts.includes(allPlayers.length)) {
+            console.error(`不支援 ${allPlayers.length} 人遊戲，需要 5-10 人`);
+            this.transport.broadcast({
+                type: 'game_error',
+                message: `不支援 ${allPlayers.length} 人遊戲，需要 5-10 人`
+            });
+            return;
+        }
+        
+        const config = this.getRoleConfig(allPlayers.length);
         const shuffledRoles = [...config.roles].sort(() => Math.random() - 0.5);
         
-        this.roles = this.players.map((player, index) => ({
+        this.roles = allPlayers.map((player, index) => ({
             playerId: player.id,
             role: shuffledRoles[index],
             isGood: ['Merlin', 'Percival', 'Loyal Servant'].includes(shuffledRoles[index])
@@ -119,20 +145,40 @@ class AvalonGame {
         this.selectedMembers = [];
         this.votes = [];
         
-        const missionSize = this.getMissionSize(this.currentMission, this.players.length);
+        // 確保房主也在玩家列表中
+        const allPlayers = [...this.players];
+        if (this.transport.isHostPlayer()) {
+            const hostPlayer = {
+                id: this.transport.getCurrentPlayerId(),
+                name: '房主',
+                ready: true
+            };
+            if (!allPlayers.find(p => p.id === hostPlayer.id)) {
+                allPlayers.unshift(hostPlayer);
+            }
+        }
+        
+        // 檢查人數是否支援
+        const supportedPlayerCounts = [5, 6, 7, 8, 9, 10];
+        if (!supportedPlayerCounts.includes(allPlayers.length)) {
+            console.error(`不支援 ${allPlayers.length} 人遊戲，需要 5-10 人`);
+            return;
+        }
+        
+        const missionSize = this.getMissionSize(this.currentMission, allPlayers.length);
         
         this.transport.broadcast({
             type: 'game_state',
             state: 'MISSION_SELECTION',
             missionNumber: this.currentMission,
             missionSize: missionSize,
-            leader: this.players[this.currentLeader].id
+            leader: allPlayers[this.currentLeader].id
         });
 
         this.triggerGameEvent('missionStarted', {
             missionNumber: this.currentMission,
             missionSize: missionSize,
-            leader: this.players[this.currentLeader].id
+            leader: allPlayers[this.currentLeader].id
         });
     }
 
@@ -154,8 +200,15 @@ class AvalonGame {
 
         this.triggerGameEvent('playerJoined', { player: newPlayer, players: this.players });
 
-        // 如果達到最小人數且是房主，可以開始遊戲
-        if (this.players.length >= 5 && this.transport.isHostPlayer()) {
+        // 檢查是否可以開始遊戲
+        let totalPlayers = this.players.length;
+        if (this.transport.isHostPlayer()) {
+            totalPlayers += 1; // 加上房主
+        }
+        
+        // 檢查人數是否在支援的範圍內（5-10人）
+        const supportedPlayerCounts = [5, 6, 7, 8, 9, 10];
+        if (supportedPlayerCounts.includes(totalPlayers) && this.transport.isHostPlayer()) {
             this.transport.broadcast({
                 type: 'game_ready',
                 canStart: true
@@ -256,8 +309,28 @@ class AvalonGame {
         if (goodWins || evilWins) {
             this.endGame(goodWins ? 'good' : 'evil');
         } else {
+            // 確保房主也在玩家列表中進行隊長輪換
+            let allPlayers = [...this.players];
+            if (this.transport.isHostPlayer()) {
+                const hostPlayer = {
+                    id: this.transport.getCurrentPlayerId(),
+                    name: '房主',
+                    ready: true
+                };
+                if (!allPlayers.find(p => p.id === hostPlayer.id)) {
+                    allPlayers.unshift(hostPlayer);
+                }
+            }
+            
+            // 檢查人數是否支援
+            const supportedPlayerCounts = [5, 6, 7, 8, 9, 10];
+            if (!supportedPlayerCounts.includes(allPlayers.length)) {
+                console.error(`不支援 ${allPlayers.length} 人遊戲，需要 5-10 人`);
+                return;
+            }
+            
             // 輪換隊長
-            this.currentLeader = (this.currentLeader + 1) % this.players.length;
+            this.currentLeader = (this.currentLeader + 1) % allPlayers.length;
             this.startMission();
         }
     }
@@ -309,15 +382,34 @@ class AvalonGame {
 
     // 獲取遊戲狀態
     getGameState() {
+        // 確保房主也在玩家列表中
+        let allPlayers = [...this.players];
+        if (this.transport.isHostPlayer()) {
+            const hostPlayer = {
+                id: this.transport.getCurrentPlayerId(),
+                name: '房主',
+                ready: true
+            };
+            if (!allPlayers.find(p => p.id === hostPlayer.id)) {
+                allPlayers.unshift(hostPlayer);
+            }
+        }
+        
+        // 檢查人數是否支援
+        const supportedPlayerCounts = [5, 6, 7, 8, 9, 10];
+        const isSupported = supportedPlayerCounts.includes(allPlayers.length);
+        
         return {
             state: this.gameState,
-            players: this.players,
+            players: allPlayers,
             roles: this.roles,
             currentMission: this.currentMission,
             missionResults: this.missionResults,
             currentLeader: this.currentLeader,
             selectedMembers: this.selectedMembers,
-            votes: this.votes
+            votes: this.votes,
+            isSupported: isSupported,
+            supportedPlayerCounts: supportedPlayerCounts
         };
     }
 
@@ -335,12 +427,40 @@ class AvalonGame {
 
     // 檢查是否可以開始遊戲
     canStartGame() {
-        return this.players.length >= 5 && this.players.length <= 10;
+        // 確保房主也在玩家列表中
+        let totalPlayers = this.players.length;
+        if (this.transport.isHostPlayer()) {
+            totalPlayers += 1; // 加上房主
+        }
+        
+        // 檢查人數是否在支援的範圍內（5-10人）
+        const supportedPlayerCounts = [5, 6, 7, 8, 9, 10];
+        return supportedPlayerCounts.includes(totalPlayers);
     }
 
     // 獲取當前隊長
     getCurrentLeader() {
-        return this.players[this.currentLeader];
+        // 確保房主也在玩家列表中
+        let allPlayers = [...this.players];
+        if (this.transport.isHostPlayer()) {
+            const hostPlayer = {
+                id: this.transport.getCurrentPlayerId(),
+                name: '房主',
+                ready: true
+            };
+            if (!allPlayers.find(p => p.id === hostPlayer.id)) {
+                allPlayers.unshift(hostPlayer);
+            }
+        }
+        
+        // 檢查人數是否支援
+        const supportedPlayerCounts = [5, 6, 7, 8, 9, 10];
+        if (!supportedPlayerCounts.includes(allPlayers.length)) {
+            console.error(`不支援 ${allPlayers.length} 人遊戲，需要 5-10 人`);
+            return null;
+        }
+        
+        return allPlayers[this.currentLeader];
     }
 
     // 獲取任務進度
@@ -348,6 +468,18 @@ class AvalonGame {
         const goodWins = this.missionResults.filter(r => r.success).length;
         const evilWins = this.missionResults.filter(r => !r.success).length;
         return { goodWins, evilWins, totalMissions: this.missionResults.length };
+    }
+
+    // 處理房間訊息
+    handleRoomMessage(msg) {
+        // 廣播房間訊息給所有玩家
+        this.transport.broadcast({
+            type: 'room_message',
+            playerId: msg.playerId,
+            playerName: msg.playerName || `玩家${msg.playerId.substr(-4)}`,
+            message: msg.message,
+            timestamp: Date.now()
+        });
     }
 }
 
