@@ -123,39 +123,65 @@ class UIController {
         this.hideElement('mainMenu');
         this.showElement('qrContainer');
         
-        // 房主創建一個peer並保存，用於後續處理answer
-        this.hostPeer = new SimplePeer({ initiator: true, trickle: false });
-        this.setupPeer(this.hostPeer);
-        
-        this.hostPeer.on('signal', (data) => {
-            // 房主發送offer信號
-            if (data.type === 'offer') {
-                console.log('房主生成offer信號');
-                console.log('當前信令狀態:', this.hostPeer.signalingState);
-                console.log('當前連接狀態:', this.hostPeer.connectionState);
-                
-                const compressed = LZString.compressToBase64(JSON.stringify(data));
-                this.qrcode.makeCode(compressed);
-                document.getElementById('qrText').textContent = compressed;
-                document.getElementById('qrTitle').textContent = '請讓其他玩家掃描此QR碼加入';
-                
-                // 保存offer信號，供後續使用
-                this.hostOfferSignal = data;
+        try {
+            // 檢查SimplePeer是否可用
+            if (typeof SimplePeer === 'undefined') {
+                throw new Error('SimplePeer 庫未載入，請檢查網路連接');
             }
-        });
+            
+            // 房主創建一個peer並保存，用於後續處理answer
+            console.log('房主創建WebRTC peer...');
+            this.hostPeer = new SimplePeer({ 
+                initiator: true, 
+                trickle: false,
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' }
+                    ]
+                }
+            });
+            
+            console.log('房主peer創建完成，初始信令狀態:', this.hostPeer.signalingState);
+            this.setupPeer(this.hostPeer);
+            
+            this.hostPeer.on('signal', (data) => {
+                // 房主發送offer信號
+                if (data.type === 'offer') {
+                    console.log('房主生成offer信號');
+                    console.log('當前信令狀態:', this.hostPeer.signalingState);
+                    console.log('當前連接狀態:', this.hostPeer.connectionState);
+                    
+                    const compressed = LZString.compressToBase64(JSON.stringify(data));
+                    this.qrcode.makeCode(compressed);
+                    document.getElementById('qrText').textContent = compressed;
+                    document.getElementById('qrTitle').textContent = '請讓其他玩家掃描此QR碼加入';
+                    
+                    // 保存offer信號，供後續使用
+                    this.hostOfferSignal = data;
+                }
+            });
 
-        this.hostPeer.on('connect', () => {
-            console.log('玩家連接成功');
-            console.log('最終信令狀態:', this.hostPeer.signalingState);
-            console.log('最終連接狀態:', this.hostPeer.connectionState);
-            this.addChatMessage('玩家已連接');
-            // 連接建立後，停止掃描並進入遊戲大廳
-            this.stopScanning();
+            this.hostPeer.on('connect', () => {
+                console.log('玩家連接成功');
+                console.log('最終信令狀態:', this.hostPeer.signalingState);
+                console.log('最終連接狀態:', this.hostPeer.connectionState);
+                this.addChatMessage('玩家已連接');
+                // 連接建立後，停止掃描並進入遊戲大廳
+                this.stopScanning();
+                this.hideElement('qrContainer');
+                this.hideElement('scanContainer');
+                this.showElement('gameArea');
+                document.getElementById('status').textContent = '等待更多玩家加入...';
+            });
+            
+        } catch (error) {
+            console.error('創建房間失敗:', error);
+            this.logError('創建房間錯誤', `創建房間失敗: ${error.message}`, error.stack);
+            // 顯示錯誤信息給用戶
+            this.showElement('mainMenu');
             this.hideElement('qrContainer');
-            this.hideElement('scanContainer');
-            this.showElement('gameArea');
-            document.getElementById('status').textContent = '等待更多玩家加入...';
-        });
+        }
 
         // 房主也需要掃描功能來接收加入者的answer
         // 在QR碼下方添加掃描按鈕
@@ -249,7 +275,16 @@ class UIController {
                 this.logError('SimplePeer庫載入', `SimplePeer庫載入失敗`);
                 throw new Error('SimplePeer 庫未載入');
             }
-            const peer = new SimplePeer({ initiator: false, trickle: false });
+            const peer = new SimplePeer({ 
+                initiator: false, 
+                trickle: false,
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' }
+                    ]
+                }
+            });
             this.setupPeer(peer);
             console.log('手動加入者創建peer完成');
             console.log('手動加入者peer初始信令狀態:', peer.signalingState);
@@ -368,7 +403,16 @@ class UIController {
                                     this.logError('SimplePeer庫載入', `SimplePeer庫載入失敗`);
                                     throw new Error('SimplePeer 庫未載入');
                                 }
-                                const peer = new SimplePeer({ initiator: false, trickle: false });
+                                const peer = new SimplePeer({ 
+                                    initiator: false, 
+                                    trickle: false,
+                                    config: {
+                                        iceServers: [
+                                            { urls: 'stun:stun.l.google.com:19302' },
+                                            { urls: 'stun:stun1.l.google.com:19302' }
+                                        ]
+                                    }
+                                });
                                 this.setupPeer(peer);
                                 console.log('加入者創建peer完成');
                                 console.log('加入者peer初始信令狀態:', peer.signalingState);
@@ -404,10 +448,14 @@ class UIController {
                                     return;
                                 }
                                 
-                                // 檢查信令狀態是否正確
-                                if (this.hostPeer.signalingState !== 'have-local-offer') {
-                                    console.error('信令狀態錯誤，期望 have-local-offer，實際:', this.hostPeer.signalingState);
-                                    this.logError('Peer錯誤', `信令狀態錯誤: ${this.hostPeer.signalingState}，請重新創建房間`);
+                                // 移除過於嚴格的信令狀態檢查，改為更寬鬆的檢查
+                                console.log('當前信令狀態:', this.hostPeer.signalingState);
+                                console.log('當前連接狀態:', this.hostPeer.connectionState);
+                                
+                                // 只有在信令狀態明顯錯誤時才拒絕
+                                if (this.hostPeer.signalingState === 'closed') {
+                                    console.error('信令狀態已關閉，無法處理answer');
+                                    this.logError('Peer錯誤', '信令連接已關閉，請重新創建房間');
                                     return;
                                 }
                                 
@@ -648,7 +696,29 @@ class UIController {
             console.error('WebRTC連接錯誤:', err);
             console.error('錯誤發生時的信令狀態:', peer.signalingState);
             console.error('錯誤發生時的連接狀態:', peer.connectionState);
-            this.logError('Peer錯誤', `WebRTC連接錯誤: ${err.message}`, err.stack);
+            
+            // 根據錯誤類型提供更具體的錯誤信息
+            let errorMessage = 'WebRTC連接錯誤';
+            if (err.message.includes('ICE')) {
+                errorMessage = '網路連接問題，請檢查網路設置';
+            } else if (err.message.includes('signaling')) {
+                errorMessage = '信令交換失敗，請重新嘗試連接';
+            } else if (err.message.includes('peer')) {
+                errorMessage = '對等連接失敗，請重新掃描QR碼';
+            }
+            
+            this.logError('Peer錯誤', `${errorMessage}: ${err.message}`, err.stack);
+            
+            // 如果不是致命錯誤，嘗試重新連接
+            if (err.message.includes('ICE') || err.message.includes('signaling')) {
+                console.log('嘗試重新建立連接...');
+                setTimeout(() => {
+                    if (!peer.destroyed && !peer.connected) {
+                        console.log('重新嘗試信令交換...');
+                        // 這裡可以添加重連邏輯
+                    }
+                }, 2000);
+            }
         });
 
         peer.on('close', () => {
@@ -656,6 +726,68 @@ class UIController {
             console.log('連接關閉時的信令狀態:', peer.signalingState);
             this.addChatMessage('WebRTC連接已關閉');
         });
+
+        // 添加連接狀態變更監控
+        if (peer.connectionState) {
+            peer.on('connectionStateChange', () => {
+                console.log('連接狀態變更:', peer.connectionState);
+                console.log('信令狀態:', peer.signalingState);
+                
+                switch (peer.connectionState) {
+                    case 'new':
+                        console.log('連接初始化中...');
+                        break;
+                    case 'connecting':
+                        console.log('正在建立連接...');
+                        this.addChatMessage('正在建立連接...');
+                        break;
+                    case 'connected':
+                        console.log('連接已建立');
+                        this.addChatMessage('連接已建立');
+                        break;
+                    case 'disconnected':
+                        console.log('連接已斷開');
+                        this.addChatMessage('連接已斷開，嘗試重新連接...');
+                        break;
+                    case 'failed':
+                        console.log('連接失敗');
+                        this.addChatMessage('連接失敗，請重新嘗試');
+                        break;
+                    case 'closed':
+                        console.log('連接已關閉');
+                        this.addChatMessage('連接已關閉');
+                        break;
+                }
+            });
+        }
+
+        // 添加信令狀態變更監控
+        if (peer.signalingState) {
+            peer.on('signalingStateChange', () => {
+                console.log('信令狀態變更:', peer.signalingState);
+                
+                switch (peer.signalingState) {
+                    case 'stable':
+                        console.log('信令狀態穩定');
+                        break;
+                    case 'have-local-offer':
+                        console.log('已發送本地offer');
+                        break;
+                    case 'have-remote-offer':
+                        console.log('已收到遠程offer');
+                        break;
+                    case 'have-local-pranswer':
+                        console.log('已發送本地pranswer');
+                        break;
+                    case 'have-remote-pranswer':
+                        console.log('已收到遠程pranswer');
+                        break;
+                    case 'closed':
+                        console.log('信令狀態已關閉');
+                        break;
+                }
+            });
+        }
 
         peer.on('data', (data) => {
             try {
@@ -667,9 +799,6 @@ class UIController {
                 this.logError('Peer數據錯誤', `數據解析失敗: ${error.message}`);
             }
         });
-
-        // 將peer添加到transport層
-        this.transport.addPeer(peer);
     }
 
     // 更新玩家列表

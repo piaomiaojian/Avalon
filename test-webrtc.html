@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebRTC連接測試</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        .warning { background-color: #fff3cd; color: #856404; }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #6c757d; cursor: not-allowed; }
+        .log {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 10px;
+            height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .qr-container {
+            text-align: center;
+            margin: 20px 0;
+        }
+        #qrCode {
+            border: 2px solid #ddd;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>WebRTC連接測試</h1>
+        
+        <div id="status" class="status info">準備開始測試...</div>
+        
+        <div>
+            <button id="createRoom">創建房間</button>
+            <button id="joinRoom">加入房間</button>
+            <button id="clearLog">清除日誌</button>
+        </div>
+        
+        <div class="qr-container">
+            <h3 id="qrTitle" style="margin-bottom: 10px; color: #333;"></h3>
+            <div id="qrCode"></div>
+            <div id="qrText" style="margin-top: 10px; word-break: break-all; font-family: monospace; font-size: 12px; background: #f8f9fa; padding: 10px; border-radius: 5px; border: 1px solid #dee2e6;"></div>
+            <button id="copyText" style="margin-top: 10px; background-color: #28a745; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer; display: none;">📋 複製文字</button>
+        </div>
+        
+        <div style="margin: 20px 0;">
+            <h3>手動輸入信號:</h3>
+            <textarea id="signalInput" placeholder="請貼上信號內容..." style="width: 100%; height: 80px; margin: 10px 0;"></textarea>
+            <button id="processSignal">處理信號</button>
+        </div>
+        
+        <div style="margin: 20px 0;">
+            <h3>數據傳輸測試:</h3>
+            <input id="messageInput" type="text" placeholder="輸入要發送的訊息..." style="width: 70%; padding: 8px; margin-right: 10px;">
+            <button id="sendMessage">發送訊息</button>
+            <div id="receivedMessages" style="margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 5px; min-height: 100px;">
+                <strong>收到的訊息:</strong>
+                <div id="messageList"></div>
+            </div>
+        </div>
+        
+        <div>
+            <h3>連接日誌:</h3>
+            <div id="log" class="log"></div>
+        </div>
+    </div>
+
+    <!-- 載入必要的庫 -->
+    <script src="https://cdn.jsdelivr.net/npm/simple-peer@9.11.1/simplepeer.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lz-string@1.4.4/libs/lz-string.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+    <script>
+        class WebRTCTest {
+            constructor() {
+                this.hostPeer = null;
+                this.guestPeer = null;
+                this.isHost = false;
+                this.qrcode = null;
+                this.setupEventListeners();
+                this.setupQRCode();
+                this.log('WebRTC測試頁面已載入');
+                this.checkLibraries();
+            }
+
+            checkLibraries() {
+                const libraries = {
+                    'SimplePeer': typeof SimplePeer !== 'undefined',
+                    'LZString': typeof LZString !== 'undefined',
+                    'QRCode': typeof QRCode !== 'undefined'
+                };
+                
+                this.log('庫載入狀態檢查:');
+                Object.entries(libraries).forEach(([name, loaded]) => {
+                    this.log(`${name}: ${loaded ? '✅ 已載入' : '❌ 未載入'}`);
+                });
+                
+                if (!libraries.SimplePeer) {
+                    this.updateStatus('SimplePeer庫未載入，無法進行WebRTC連接', 'error');
+                } else if (!libraries.LZString) {
+                    this.updateStatus('LZString庫未載入，無法壓縮信號', 'error');
+                } else if (!libraries.QRCode) {
+                    this.updateStatus('QRCode庫未載入，將使用文字顯示', 'warning');
+                } else {
+                    this.updateStatus('所有庫已載入，可以開始測試', 'success');
+                }
+            }
+
+            setupEventListeners() {
+                document.getElementById('createRoom').addEventListener('click', () => {
+                    this.createRoom();
+                });
+                
+                document.getElementById('joinRoom').addEventListener('click', () => {
+                    this.joinRoom();
+                });
+                
+                document.getElementById('clearLog').addEventListener('click', () => {
+                    this.clearLog();
+                });
+                
+                document.getElementById('processSignal').addEventListener('click', () => {
+                    this.processManualSignal();
+                });
+                
+                document.getElementById('copyText').addEventListener('click', () => {
+                    this.copyToClipboard();
+                });
+                
+                document.getElementById('sendMessage').addEventListener('click', () => {
+                    this.sendTestMessage();
+                });
+            }
+
+            log(message) {
+                const logElement = document.getElementById('log');
+                const timestamp = new Date().toLocaleTimeString();
+                logElement.innerHTML += `[${timestamp}] ${message}\n`;
+                logElement.scrollTop = logElement.scrollHeight;
+                console.log(message);
+            }
+
+            clearLog() {
+                document.getElementById('log').innerHTML = '';
+            }
+
+            updateStatus(message, type = 'info') {
+                const statusElement = document.getElementById('status');
+                statusElement.textContent = message;
+                statusElement.className = `status ${type}`;
+            }
+
+            createRoom() {
+                this.isHost = true;
+                this.log('開始創建房間...');
+                this.updateStatus('正在創建房間...', 'info');
+
+                try {
+                    this.hostPeer = new SimplePeer({ 
+                        initiator: true, 
+                        trickle: false,
+                        config: {
+                            iceServers: [
+                                { urls: 'stun:stun.l.google.com:19302' },
+                                { urls: 'stun:stun1.l.google.com:19302' }
+                            ]
+                        }
+                    });
+
+                    this.setupPeer(this.hostPeer, '房主');
+                    this.log('房主peer創建完成');
+                    this.updateStatus('房間已創建，等待加入者...', 'success');
+
+                } catch (error) {
+                    this.log(`創建房間失敗: ${error.message}`);
+                    this.updateStatus(`創建房間失敗: ${error.message}`, 'error');
+                }
+            }
+
+            joinRoom() {
+                this.isHost = false;
+                this.log('準備加入房間...');
+                this.updateStatus('請掃描房主的QR碼', 'info');
+
+                // 模擬收到offer信號
+                const offerSignal = prompt('請輸入房主的offer信號:');
+                if (offerSignal) {
+                    this.processSignal(offerSignal);
+                }
+            }
+
+            processManualSignal() {
+                const signalInput = document.getElementById('signalInput');
+                const signal = signalInput.value.trim();
+                
+                if (!signal) {
+                    this.log('請輸入信號內容');
+                    return;
+                }
+                
+                this.processSignal(signal);
+            }
+
+            processSignal(signal) {
+                try {
+                    const data = JSON.parse(LZString.decompressFromBase64(signal));
+                    this.log(`收到信號: ${data.type}`);
+                    
+                    if (data.type === 'offer') {
+                        // 處理offer信號
+                        if (this.guestPeer) {
+                            this.log('加入者peer已存在，銷毀舊的peer');
+                            this.guestPeer.destroy();
+                        }
+                        
+                        this.guestPeer = new SimplePeer({ 
+                            initiator: false, 
+                            trickle: false,
+                            config: {
+                                iceServers: [
+                                    { urls: 'stun:stun.l.google.com:19302' },
+                                    { urls: 'stun:stun1.l.google.com:19302' }
+                                ]
+                            }
+                        });
+
+                        this.setupPeer(this.guestPeer, '加入者');
+                        this.guestPeer.signal(data);
+                        this.log('加入者peer創建完成並處理offer');
+                        this.updateStatus('正在處理offer信號...', 'info');
+                        
+                    } else if (data.type === 'answer') {
+                        // 處理answer信號
+                        if (this.hostPeer) {
+                            this.hostPeer.signal(data);
+                            this.log('房主處理answer信號完成');
+                            this.updateStatus('正在處理answer信號...', 'info');
+                        } else {
+                            this.log('房主peer不存在，無法處理answer');
+                            this.updateStatus('房主peer不存在', 'error');
+                        }
+                    } else {
+                        this.log(`未知的信號類型: ${data.type}`);
+                        this.updateStatus(`未知的信號類型: ${data.type}`, 'error');
+                    }
+                    
+                } catch (error) {
+                    this.log(`處理信號失敗: ${error.message}`);
+                    this.updateStatus(`處理信號失敗: ${error.message}`, 'error');
+                }
+            }
+
+            setupPeer(peer, role) {
+                this.log(`${role}開始設置WebRTC連接`);
+                this.log(`${role}初始信令狀態: ${peer.signalingState}`);
+
+                peer.on('signal', (data) => {
+                    this.log(`${role}發送信號: ${data.type}`);
+                    this.log(`${role}發送信號時的信令狀態: ${peer.signalingState}`);
+                    
+                    if (data.type === 'offer') {
+                        const compressed = LZString.compressToBase64(JSON.stringify(data));
+                        this.showQRCode(compressed, '請讓加入者掃描此QR碼');
+                        this.log(`房主生成offer信號: ${compressed.substring(0, 50)}...`);
+                    } else if (data.type === 'answer') {
+                        const compressed = LZString.compressToBase64(JSON.stringify(data));
+                        this.showQRCode(compressed, '請讓房主掃描此QR碼完成連接');
+                        this.log(`加入者生成answer信號: ${compressed.substring(0, 50)}...`);
+                    }
+                });
+
+                peer.on('connect', () => {
+                    this.log(`${role}WebRTC連接建立成功`);
+                    this.log(`${role}連接建立時的信令狀態: ${peer.signalingState}`);
+                    this.log(`${role}連接建立時的連接狀態: ${peer.connectionState}`);
+                    this.updateStatus(`${role}連接已建立`, 'success');
+                });
+
+                peer.on('error', (err) => {
+                    this.log(`${role}WebRTC連接錯誤: ${err.message}`);
+                    this.log(`${role}錯誤發生時的信令狀態: ${peer.signalingState}`);
+                    this.updateStatus(`${role}連接錯誤: ${err.message}`, 'error');
+                });
+
+                peer.on('close', () => {
+                    this.log(`${role}WebRTC連接已關閉`);
+                    this.log(`${role}連接關閉時的信令狀態: ${peer.signalingState}`);
+                    this.updateStatus(`${role}連接已關閉`, 'warning');
+                });
+
+                // 添加連接狀態變更監控
+                if (peer.connectionState) {
+                    peer.on('connectionStateChange', () => {
+                        this.log(`${role}連接狀態變更: ${peer.connectionState}`);
+                        this.log(`${role}信令狀態: ${peer.signalingState}`);
+                    });
+                }
+
+                // 添加信令狀態變更監控
+                if (peer.signalingState) {
+                    peer.on('signalingStateChange', () => {
+                        this.log(`${role}信令狀態變更: ${peer.signalingState}`);
+                    });
+                }
+
+                peer.on('data', (data) => {
+                    try {
+                        const message = JSON.parse(data);
+                        this.log(`${role}收到數據: ${message.type || 'unknown'}`);
+                    } catch (error) {
+                        this.log(`${role}數據解析失敗: ${error.message}`);
+                    }
+                });
+            }
+
+            showQRCode(text, title) {
+                const qrContainer = document.getElementById('qrCode');
+                const qrText = document.getElementById('qrText');
+                const qrTitle = document.getElementById('qrTitle');
+                const copyButton = document.getElementById('copyText');
+                
+                // 設置標題
+                qrTitle.textContent = title;
+                
+                // 檢查QRCode庫是否可用
+                if (typeof QRCode === 'undefined' || !this.qrcode) {
+                    this.log('QRCode庫未載入，使用文字顯示');
+                    qrContainer.innerHTML = `<div style="padding: 20px; background: #f8f9fa; border: 2px dashed #dee2e6; border-radius: 10px;">
+                        <strong>QR碼生成失敗</strong><br>
+                        <small>請複製以下文字：</small><br>
+                        <textarea style="width: 100%; height: 60px; margin-top: 10px; font-size: 10px;" readonly>${text}</textarea>
+                    </div>`;
+                    qrText.textContent = text;
+                    copyButton.style.display = 'inline-block';
+                    return;
+                }
+                
+                try {
+                    // 使用與app.js相同的makeCode方法
+                    this.qrcode.makeCode(text);
+                    this.log(`QR碼已生成: ${title}`);
+                    
+                    // 顯示文字內容
+                    qrText.textContent = text;
+                    copyButton.style.display = 'inline-block';
+                    
+                } catch (error) {
+                    this.log(`QR碼生成異常: ${error.message}`);
+                    qrContainer.innerHTML = `<div style="padding: 20px; background: #f8f9fa; border: 2px dashed #dee2e6; border-radius: 10px;">
+                        <strong>QR碼生成失敗</strong><br>
+                        <small>請複製以下文字：</small><br>
+                        <textarea style="width: 100%; height: 60px; margin-top: 10px; font-size: 10px;" readonly>${text}</textarea>
+                    </div>`;
+                    qrText.textContent = text;
+                    copyButton.style.display = 'inline-block';
+                }
+            }
+
+            copyToClipboard() {
+                const qrText = document.getElementById('qrText');
+                const text = qrText.textContent;
+                
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(text).then(() => {
+                        this.log('文字已複製到剪貼板');
+                        const copyButton = document.getElementById('copyText');
+                        copyButton.textContent = '✅ 已複製';
+                        setTimeout(() => {
+                            copyButton.textContent = '📋 複製文字';
+                        }, 2000);
+                    }).catch(err => {
+                        this.log(`複製失敗: ${err.message}`);
+                        this.fallbackCopyToClipboard(text);
+                    });
+                } else {
+                    this.fallbackCopyToClipboard(text);
+                }
+            }
+
+            fallbackCopyToClipboard(text) {
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                textArea.style.position = 'fixed';
+                textArea.style.left = '-999999px';
+                textArea.style.top = '-999999px';
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                
+                try {
+                    document.execCommand('copy');
+                    this.log('文字已複製到剪貼板（備用方法）');
+                    const copyButton = document.getElementById('copyText');
+                    copyButton.textContent = '✅ 已複製';
+                    setTimeout(() => {
+                        copyButton.textContent = '📋 複製文字';
+                    }, 2000);
+                } catch (err) {
+                    this.log(`複製失敗: ${err.message}`);
+                }
+                
+                document.body.removeChild(textArea);
+            }
+
+            setupQRCode() {
+                try {
+                    this.qrcode = new QRCode("qrCode", {
+                        width: 240,
+                        height: 240,
+                        colorDark: "#000000",
+                        colorLight: "#ffffff",
+                        correctLevel: QRCode.CorrectLevel.L
+                    });
+                    this.log('QRCode初始化成功');
+                } catch (error) {
+                    this.log(`QRCode初始化失敗: ${error.message}`);
+                }
+            }
+        }
+
+        // 初始化測試
+        const test = new WebRTCTest();
+    </script>
+</body>
+</html> 
