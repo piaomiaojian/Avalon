@@ -1,5 +1,5 @@
 // ==================== UI控制層 (UI Controller) ====================
-// 版本: 1.0.38
+// 版本: 1.0.39
 // 最後更新: 2024-12-19
 // 修復內容: 採用webrtc-chat-test.html的多人連線方式
 
@@ -187,45 +187,43 @@ class UIController {
         });
 
         this.game.onGameEvent('rolesAssigned', (data) => {
-            this.addChatMessage('角色分配完成！');
             this.addRoomMessage('遊戲開始！角色分配完成');
             this.showGameOperationArea();
         });
 
         this.game.onGameEvent('missionStarted', (data) => {
-            this.addChatMessage(`第${data.missionNumber}輪任務開始，需要${data.missionSize}名成員`);
+            this.addRoomMessage(`第${data.missionNumber}輪任務開始，需要${data.missionSize}名成員`);
             this.updateGamePhase();
         });
 
         this.game.onGameEvent('votingStarted', (data) => {
-            this.addChatMessage('開始投票！');
+            this.addRoomMessage('開始投票！');
             this.updateGamePhase();
         });
 
         this.game.onGameEvent('voteReceived', (data) => {
-            this.addChatMessage(`收到投票: ${data.vote.vote ? '成功' : '失敗'}`);
+            this.addRoomMessage(`收到投票: ${data.vote.vote ? '成功' : '失敗'}`);
         });
 
         this.game.onGameEvent('missionCompleted', (data) => {
-            this.addChatMessage(`第${data.missionNumber}輪任務: ${data.success ? '成功' : '失敗'}`);
+            this.addRoomMessage(`第${data.missionNumber}輪任務: ${data.success ? '成功' : '失敗'}`);
             this.updateGamePhase();
         });
 
         this.game.onGameEvent('gameEnded', (data) => {
-            this.addChatMessage(`遊戲結束！${data.winner === 'good' ? '好人' : '壞人'}獲勝！`);
             this.addRoomMessage(`遊戲結束！${data.winner === 'good' ? '好人' : '壞人'}獲勝！`);
         });
 
         this.game.onGameEvent('assassinationCompleted', (data) => {
             const result = data.assassinWins ? '刺客成功刺殺梅林！壞人最終獲勝！' : '刺客刺殺失敗！好人最終獲勝！';
-            this.addChatMessage(result);
             this.addRoomMessage(result);
         });
         
         // 處理房間聊天訊息
         this.transport.onMessage('room_message', (data) => {
             const senderName = data.playerName || `玩家${data.playerId.substr(-4)}`;
-            this.addRoomMessage(`${senderName}: ${data.message}`, false);
+            // 接收到的訊息顯示在左邊
+            this.addChatMessage(`${senderName}: ${data.message}`, 'received');
         });
         
         // 處理房間狀態同步
@@ -246,10 +244,15 @@ class UIController {
                     data.chatHistory.forEach(msg => {
                         if (typeof msg === 'string') {
                             // 向後兼容
-                            this.addRoomMessage(msg.replace('[系統] ', ''), msg.includes('[系統]'));
+                            if (msg.includes('[系統]')) {
+                                this.addChatMessage(msg, 'system');
+                            } else {
+                                this.addChatMessage(msg, 'received');
+                            }
                         } else {
                             // 新格式
-                            this.addRoomMessage(msg.content.replace('[系統] ', ''), msg.isSystem);
+                            const type = msg.isSystem ? 'system' : 'received';
+                            this.addChatMessage(msg.content, type);
                         }
                     });
                 }
@@ -268,10 +271,11 @@ class UIController {
             const chatMessages = document.getElementById('chatMessages');
             const chatHistory = [];
             if (chatMessages) {
-                const messages = chatMessages.querySelectorAll('.room-message');
+                const messages = chatMessages.querySelectorAll('.message');
                 messages.forEach(msg => {
+                    const textContent = msg.querySelector('div:first-child')?.textContent || msg.textContent;
                     chatHistory.push({
-                        content: msg.textContent,
+                        content: textContent,
                         isSystem: msg.classList.contains('system')
                     });
                 });
@@ -963,7 +967,8 @@ class UIController {
                     qrTextElement.textContent = compressed;
                 }
                 
-                this.addChatMessage('已生成連接QR碼，請讓其他玩家掃描');
+                // 這是系統訊息，應該使用addRoomMessage
+            // this.addChatMessage('已生成連接QR碼，請讓其他玩家掃描');
                 
             } else if (data.type === 'answer') {
                 // 加入者生成answer信號
@@ -992,7 +997,8 @@ class UIController {
                     qrTitleElement.textContent = '請讓房主掃描此QR碼完成連接';
                 }
                 
-                this.addChatMessage('已生成連接QR碼，請讓房主掃描');
+                // 這是系統訊息，應該使用addRoomMessage
+                // this.addChatMessage('已生成連接QR碼，請讓房主掃描');
                 
             } else if (data.type === 'candidate') {
                 // ICE候選信號，需要即時交換
@@ -1013,7 +1019,8 @@ class UIController {
             console.log('WebRTC連接建立成功');
             console.log('連接建立時的信令狀態:', peer.signalingState || 'undefined');
             console.log('連接建立時的連接狀態:', peer.connectionState || 'undefined');
-            this.addChatMessage('WebRTC連接已建立');
+            // 連接訊息不需要顯示在聊天中
+            // this.addChatMessage('WebRTC連接已建立');
             
             // 連接建立後，停止掃描
             console.log('開始UI切換...');
@@ -1070,20 +1077,15 @@ class UIController {
             
             this.logError('Peer錯誤', `${errorMessage}: ${err.message}`, err.stack);
             
-            // 提供重試選項
-            this.addChatMessage(`連接失敗: ${errorMessage}`);
-            
-            // 如果是重複信號錯誤，建議重置
-            if (err.message.includes('Failed to set remote')) {
-                console.log('建議：重新開始連接');
-                this.addChatMessage('建議重新開始連接');
-            }
+            // 錯誤訊息不需要顯示在聊天中，已經有連接日誌
+            // this.addChatMessage(`連接失敗: ${errorMessage}`);
         });
 
         peer.on('close', () => {
             console.log('WebRTC連接已關閉');
             console.log('連接關閉時的信令狀態:', peer.signalingState || 'undefined');
-            this.addChatMessage('WebRTC連接已關閉');
+            // 連接訊息不需要顯示在聊天中
+            // this.addChatMessage('WebRTC連接已關閉');
         });
 
         // 添加ICE連接狀態監控
@@ -1103,23 +1105,18 @@ class UIController {
                         break;
                     case 'connecting':
                         console.log('正在建立連接...');
-                        this.addChatMessage('正在建立連接...');
                         break;
                     case 'connected':
                         console.log('連接已建立');
-                        this.addChatMessage('連接已建立');
                         break;
                     case 'disconnected':
                         console.log('連接已斷開');
-                        this.addChatMessage('連接已斷開，嘗試重新連接...');
                         break;
                     case 'failed':
                         console.log('連接失敗');
-                        this.addChatMessage('連接失敗，請重新嘗試');
                         break;
                     case 'closed':
                         console.log('連接已關閉');
-                        this.addChatMessage('連接已關閉');
                         break;
                 }
             });
@@ -1336,23 +1333,11 @@ class UIController {
         });
         
         this.hideVoteButtons();
-        this.addChatMessage(`你投票: ${success ? '成功' : '失敗'}`);
+        this.addRoomMessage(`你投票: ${success ? '成功' : '失敗'}`);
     }
 
     // 添加聊天訊息
-    addChatMessage(message) {
-        const chatMessages = document.getElementById('chatMessages');
-        if (!chatMessages) {
-            console.warn('chatMessages 元素不存在，跳過添加聊天訊息');
-            return;
-        }
-        
-        const messageDiv = document.createElement('div');
-        messageDiv.className = 'chat-message';
-        messageDiv.textContent = message;
-        chatMessages.appendChild(messageDiv);
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-    }
+    // 舊的addChatMessage方法已移除，請使用新的addChatMessage(text, type)方法
 
     // 顯示元素
     showElement(elementId) {
@@ -1735,34 +1720,51 @@ class UIController {
         const message = input.value.trim();
         
         if (message) {
-            const playerName = this.isHost ? '房主' : '玩家' + this.transport.getCurrentPlayerId().substr(-4);
-            
-            // 本地顯示
-            this.addRoomMessage(`${playerName}: ${message}`, false);
-            
-            // 廣播給其他玩家
+            // 只發送給其他玩家，不在本地顯示（避免重複）
             this.transport.broadcast({
                 type: 'room_message',
                 playerId: this.transport.getCurrentPlayerId(),
-                playerName: playerName,
-                message: message
+                playerName: this.isHost ? '房主' : '玩家' + this.transport.getCurrentPlayerId().substr(-4),
+                message: message,
+                timestamp: Date.now()
             });
+            
+            // 本地顯示為發送的訊息（右邊）
+            this.addChatMessage(message, 'sent');
             
             input.value = '';
         }
     }
 
-    // 添加房間訊息
-    addRoomMessage(message, isSystem = true) {
+    // 添加聊天訊息（參考webrtc-chat-test.html）
+    addChatMessage(text, type) {
         const chatMessages = document.getElementById('chatMessages');
-        if (chatMessages) {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = isSystem ? 'room-message system' : 'room-message user';
-            messageDiv.textContent = isSystem ? `[系統] ${message}` : message;
-            chatMessages.appendChild(messageDiv);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
+        if (!chatMessages) {
+            console.warn('chatMessages 元素不存在，跳過添加訊息');
+            return;
+        }
+        
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${type}`;
+        
+        const timestamp = new Date().toLocaleTimeString();
+        messageDiv.innerHTML = `
+            <div>${text}</div>
+            <div class="message-time">${timestamp}</div>
+        `;
+        
+        chatMessages.appendChild(messageDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    // 添加房間訊息（系統訊息）
+    addRoomMessage(message, isSystem = true) {
+        if (isSystem) {
+            this.addChatMessage(`[系統] ${message}`, 'system');
         } else {
-            console.warn('chatMessages 元素不存在，跳過添加房間訊息');
+            // 用戶訊息不應該通過這個方法處理，直接使用addChatMessage
+            console.warn('用戶訊息應該直接使用addChatMessage方法');
+            this.addChatMessage(message, 'received');
         }
     }
 
@@ -2080,26 +2082,27 @@ function initializeGame() {
         });
         
         transport.onMessage('mission_result', (msg) => {
-            window.ui.addChatMessage(`第${msg.missionNumber}輪任務: ${msg.success ? '成功' : '失敗'}`);
+            window.ui.addRoomMessage(`第${msg.missionNumber}輪任務: ${msg.success ? '成功' : '失敗'}`);
         });
         
         transport.onMessage('game_result', (msg) => {
-            window.ui.addChatMessage(`遊戲結束！${msg.winner === 'good' ? '好人' : '壞人'}獲勝！`);
+            window.ui.addRoomMessage(`遊戲結束！${msg.winner === 'good' ? '好人' : '壞人'}獲勝！`);
         });
         
         transport.onMessage('assassination_phase', (msg) => {
-            window.ui.addChatMessage('壞人獲勝！刺客可以刺殺梅林...');
+            window.ui.addRoomMessage('壞人獲勝！刺客可以刺殺梅林...');
         });
         
         transport.onMessage('assassination_result', (msg) => {
             const result = msg.assassinWins ? '刺客成功刺殺梅林！壞人最終獲勝！' : '刺客刺殺失敗！好人最終獲勝！';
-            window.ui.addChatMessage(result);
+            window.ui.addRoomMessage(result);
         });
         
-        transport.onMessage('room_message', (msg) => {
-            const senderName = msg.playerName || `玩家${msg.playerId.substr(-4)}`;
-            window.ui.addRoomMessage(`${senderName}: ${msg.message}`);
-        });
+        // 這個訊息處理器已經在setupGameEventHandlers中設置了，不需要重複
+        // transport.onMessage('room_message', (msg) => {
+        //     const senderName = msg.playerName || `玩家${msg.playerId.substr(-4)}`;
+        //     window.ui.addRoomMessage(`${senderName}: ${msg.message}`);
+        // });
         
         console.log('阿瓦隆遊戲初始化完成');
     } catch (error) {

@@ -179,8 +179,13 @@ h1 {
     justify-content: space-between;
     align-items: center;
 }
+/* 提高優先級，確保hidden類別能覆蓋其他display屬性 */
+.host-controls.hidden {
+    display: none;
+}
+
 .hidden {
-    display: none ;
+    display: none;
 }
 .role-card {
     background: linear-gradient(45deg, #00b894, #00cec9);
@@ -264,10 +269,50 @@ h1 {
     overflow-y: auto;
     background: rgba(0, 0, 0, 0.3);
     border-radius: 8px;
-    padding: 10px;
+    padding: 15px;
     margin-bottom: 10px;
     font-size: 14px;
 }
+
+/* 聊天訊息樣式 - 參考webrtc-chat-test.html */
+.message {
+    margin-bottom: 10px;
+    padding: 10px;
+    border-radius: 8px;
+    max-width: 80%;
+    word-wrap: break-word;
+    clear: both;
+}
+
+.message.sent {
+    background: #007bff;
+    color: white;
+    margin-left: auto;
+    float: right;
+}
+
+.message.received {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    float: left;
+}
+
+.message.system {
+    background: rgba(255, 193, 7, 0.2);
+    color: #ffd93d;
+    text-align: center;
+    margin: 5px auto;
+    float: none;
+    max-width: 100%;
+}
+
+.message-time {
+    font-size: 11px;
+    opacity: 0.7;
+    margin-top: 5px;
+}
+
+/* 舊的chat-message樣式保留作為備用 */
 .chat-message {
     margin-bottom: 8px;
     padding: 8px;
