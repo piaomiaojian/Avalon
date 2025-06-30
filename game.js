@@ -1,4 +1,6 @@
 // ==================== 遊戲邏輯層 (Game Logic) ====================
+// 版本: 1.0.26
+// 最後更新: 2024-12-19
 
 class AvalonGame {
     constructor(transport) {

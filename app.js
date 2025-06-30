@@ -1,4 +1,7 @@
 // ==================== UI控制層 (UI Controller) ====================
+// 版本: 1.0.26
+// 最後更新: 2024-12-19
+// 修復內容: WebRTC連接問題，改進peer配置和錯誤處理
 
 class UIController {
     constructor(game, transport) {
@@ -210,11 +213,13 @@ class UIController {
             console.log('房主創建WebRTC peer...');
             this.hostPeer = new SimplePeer({ 
                 initiator: true, 
-                trickle: false,
                 config: {
                     iceServers: [
                         { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' }
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'stun:stun2.l.google.com:19302' },
+                        { urls: 'stun:stun3.l.google.com:19302' },
+                        { urls: 'stun:stun4.l.google.com:19302' }
                     ]
                 }
             });
@@ -254,8 +259,8 @@ class UIController {
 
             this.hostPeer.on('connect', () => {
                 console.log('玩家連接成功');
-                console.log('最終信令狀態:', this.hostPeer.signalingState);
-                console.log('最終連接狀態:', this.hostPeer.connectionState);
+                console.log('最終信令狀態:', this.hostPeer.signalingState || 'undefined');
+                console.log('最終連接狀態:', this.hostPeer.connectionState || 'undefined');
                 this.addChatMessage('玩家已連接');
                 this.addRoomMessage('玩家已連接');
                 // 連接建立後，停止掃描並返回房間區域
@@ -263,6 +268,17 @@ class UIController {
                 this.hideElement('qrContainer');
                 this.hideElement('scanContainer');
                 this.showRoomArea();
+            });
+
+            this.hostPeer.on('error', (err) => {
+                console.error('房主peer錯誤:', err);
+                this.logError('房主Peer錯誤', `房主連接錯誤: ${err.message}`, err.stack);
+                this.addChatMessage(`房主連接錯誤: ${err.message}`);
+                
+                // 如果是連接失敗，提供重試選項
+                if (err.message.includes('Connection failed')) {
+                    this.addChatMessage('建議：請檢查網路連接，或嘗試重新創建房間');
+                }
             });
             
         } catch (error) {
@@ -359,11 +375,13 @@ class UIController {
             }
             const peer = new SimplePeer({ 
                 initiator: false, 
-                trickle: false,
                 config: {
                     iceServers: [
                         { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' }
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'stun:stun2.l.google.com:19302' },
+                        { urls: 'stun:stun3.l.google.com:19302' },
+                        { urls: 'stun:stun4.l.google.com:19302' }
                     ]
                 }
             });
@@ -510,11 +528,13 @@ class UIController {
                                 }
                                 const peer = new SimplePeer({ 
                                     initiator: false, 
-                                    trickle: false,
                                     config: {
                                         iceServers: [
                                             { urls: 'stun:stun.l.google.com:19302' },
-                                            { urls: 'stun:stun1.l.google.com:19302' }
+                                            { urls: 'stun:stun1.l.google.com:19302' },
+                                            { urls: 'stun:stun2.l.google.com:19302' },
+                                            { urls: 'stun:stun3.l.google.com:19302' },
+                                            { urls: 'stun:stun4.l.google.com:19302' }
                                         ]
                                     }
                                 });
@@ -737,19 +757,19 @@ class UIController {
     // 設置對等連接
     setupPeer(peer) {
         console.log('開始設置WebRTC連接');
-        console.log('設置peer時的信令狀態:', peer.signalingState);
+        console.log('設置peer時的信令狀態:', peer.signalingState || 'undefined');
 
         // 將peer添加到transport層
         this.transport.addPeer(peer);
 
         peer.on('signal', (data) => {
             console.log('發送信號:', data.type || 'unknown');
-            console.log('發送信號時的信令狀態:', peer.signalingState);
+            console.log('發送信號時的信令狀態:', peer.signalingState || 'undefined');
             
             // 如果是加入者且收到offer，需要將answer回傳給房主
             if (data.type === 'answer') {
                 console.log('加入者發送answer信號給房主');
-                console.log('發送answer時的信令狀態:', peer.signalingState);
+                console.log('發送answer時的信令狀態:', peer.signalingState || 'undefined');
                 // 將answer編碼成QR碼顯示，讓房主掃描
                 const compressed = LZString.compressToBase64(JSON.stringify(data));
                 
@@ -779,8 +799,8 @@ class UIController {
 
         peer.on('connect', () => {
             console.log('WebRTC連接建立成功');
-            console.log('連接建立時的信令狀態:', peer.signalingState);
-            console.log('連接建立時的連接狀態:', peer.connectionState);
+            console.log('連接建立時的信令狀態:', peer.signalingState || 'undefined');
+            console.log('連接建立時的連接狀態:', peer.connectionState || 'undefined');
             this.addChatMessage('WebRTC連接已建立');
             
             // 連接建立後，停止掃描
@@ -815,8 +835,8 @@ class UIController {
 
         peer.on('error', (err) => {
             console.error('WebRTC連接錯誤:', err);
-            console.error('錯誤發生時的信令狀態:', peer.signalingState);
-            console.error('錯誤發生時的連接狀態:', peer.connectionState);
+            console.error('錯誤發生時的信令狀態:', peer.signalingState || 'undefined');
+            console.error('錯誤發生時的連接狀態:', peer.connectionState || 'undefined');
             
             // 根據錯誤類型提供更具體的錯誤信息
             let errorMessage = 'WebRTC連接錯誤';
@@ -826,17 +846,23 @@ class UIController {
                 errorMessage = '信令交換失敗，請重新嘗試連接';
             } else if (err.message.includes('peer')) {
                 errorMessage = '對等連接失敗，請重新掃描QR碼';
+            } else if (err.message.includes('Connection failed')) {
+                errorMessage = '連接建立失敗，可能是網路問題或防火牆阻擋';
             }
             
             this.logError('Peer錯誤', `${errorMessage}: ${err.message}`, err.stack);
             
+            // 提供重試選項
+            this.addChatMessage(`連接失敗: ${errorMessage}`);
+            
             // 如果不是致命錯誤，嘗試重新連接
-            if (err.message.includes('ICE') || err.message.includes('signaling')) {
+            if (err.message.includes('ICE') || err.message.includes('signaling') || err.message.includes('Connection failed')) {
                 console.log('嘗試重新建立連接...');
                 setTimeout(() => {
                     if (!peer.destroyed && !peer.connected) {
                         console.log('重新嘗試信令交換...');
                         // 這裡可以添加重連邏輯
+                        this.addChatMessage('正在嘗試重新連接...');
                     }
                 }, 2000);
             }
@@ -844,15 +870,15 @@ class UIController {
 
         peer.on('close', () => {
             console.log('WebRTC連接已關閉');
-            console.log('連接關閉時的信令狀態:', peer.signalingState);
+            console.log('連接關閉時的信令狀態:', peer.signalingState || 'undefined');
             this.addChatMessage('WebRTC連接已關閉');
         });
 
         // 添加連接狀態變更監控
-        if (peer.connectionState) {
+        if (peer.connectionState !== undefined) {
             peer.on('connectionStateChange', () => {
                 console.log('連接狀態變更:', peer.connectionState);
-                console.log('信令狀態:', peer.signalingState);
+                console.log('信令狀態:', peer.signalingState || 'undefined');
                 
                 switch (peer.connectionState) {
                     case 'new':
@@ -883,7 +909,7 @@ class UIController {
         }
 
         // 添加信令狀態變更監控
-        if (peer.signalingState) {
+        if (peer.signalingState !== undefined) {
             peer.on('signalingStateChange', () => {
                 console.log('信令狀態變更:', peer.signalingState);
                 

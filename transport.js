@@ -1,4 +1,6 @@
 // ==================== 資料傳輸層 (Transport Layer) ====================
+// 版本: 1.0.26
+// 最後更新: 2024-12-19
 
 class TransportLayer {
     constructor() {
