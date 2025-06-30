@@ -1,5 +1,5 @@
 // ==================== 資料傳輸層 (Transport Layer) ====================
-// 版本: 1.0.26
+// 版本: 1.0.36
 // 最後更新: 2024-12-19
 
 class TransportLayer {
@@ -44,13 +44,44 @@ class TransportLayer {
     // 處理接收到的訊息
     handleMessage(data) {
         try {
-            const message = JSON.parse(data);
+            let message;
+            
+            // 檢查數據類型
+            if (typeof data === 'string') {
+                // 如果是字符串，嘗試解析JSON
+                message = JSON.parse(data);
+            } else if (data instanceof Uint8Array) {
+                // 如果是Uint8Array，轉換為字符串再解析
+                const dataString = new TextDecoder().decode(data);
+                message = JSON.parse(dataString);
+            } else if (typeof data === 'object' && data !== null) {
+                // 如果已經是對象，直接使用
+                message = data;
+            } else {
+                console.error('無效的訊息數據類型:', typeof data);
+                return;
+            }
+            
+            // 檢查訊息格式
+            if (!message || typeof message !== 'object') {
+                console.error('無效的訊息格式:', message);
+                return;
+            }
+            
+            if (!message.type) {
+                console.error('訊息缺少type屬性:', message);
+                return;
+            }
+            
             const handler = this.messageHandlers.get(message.type);
             if (handler) {
                 handler(message);
+            } else {
+                console.warn('未找到訊息處理器:', message.type);
             }
         } catch (error) {
             console.error('訊息解析錯誤:', error);
+            console.error('原始數據:', data);
         }
     }
 

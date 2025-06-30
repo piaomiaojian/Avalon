@@ -4,11 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>阿瓦隆 - 手機版</title>
-    <link rel="stylesheet" href="style.css?v=1.0.26">
+    <link rel="stylesheet" href="style.css?v=1.0.36">
 </head>
 <body>
     <div class="container">
-        <h1>🏰 阿瓦隆 - 1.0.26</h1>
+        <h1>🏰 阿瓦隆 - v1.0.36</h1>
         
         <!-- 主選單 -->
         <div id="mainMenu">
@@ -75,14 +75,25 @@
                 <div id="roomPlayerList" class="room-player-list"></div>
             </div>
             
-            <!-- 聊天區域 -->
-            <div class="room-chat">
-                <h3>房間聊天</h3>
-                <div id="roomChatMessages" class="chat-messages"></div>
-                <div class="chat-input">
-                    <input type="text" id="roomChatInput" placeholder="輸入訊息..." maxlength="100">
-                    <button id="btnSendMessage" class="btn btn-small">發送</button>
+            <!-- 房間聊天區域 -->
+            <div class="chat-area">
+                <div class="chat-header">
+                    <h3>💬 房間聊天</h3>
                 </div>
+                <div id="chatMessages" class="chat-messages"></div>
+                <div class="chat-input-area">
+                    <input type="text" id="chatInput" placeholder="輸入訊息..." maxlength="100">
+                    <button id="sendChatBtn">發送</button>
+                </div>
+            </div>
+
+            <!-- 連接日誌區域 -->
+            <div class="connection-log-area">
+                <div class="log-header">
+                    <h3>📋 連接日誌</h3>
+                    <button id="clearLogBtn" class="clear-log-btn">清空</button>
+                </div>
+                <div id="connectionLog" class="connection-log"></div>
             </div>
         </div>
 
@@ -176,8 +187,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
 
     <!-- 遊戲腳本 -->
-    <script src="app.js?v=1.0.26"></script>
-    <script src="game.js?v=1.0.26"></script>
-    <script src="transport.js?v=1.0.26"></script>
+    <script src="app.js?v=1.0.36"></script>
+    <script src="game.js?v=1.0.36"></script>
+    <script src="transport.js?v=1.0.36"></script>
 </body>
 </html> 

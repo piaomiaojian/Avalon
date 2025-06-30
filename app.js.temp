@@ -1,0 +1,1621 @@
+// ==================== UI?�制�?(UI Controller) ====================
+// ?�本: 1.0.30
+// ?�後更?? 2024-12-19
+// 修復?�容: WebRTC??��?��?，�?步webrtc-chat-test.html?�修�?// - 修復ICE?�選信�??��?
+// - 添�?信�?驗�??��?濾�???// - ?�進錯誤�??��???��?�?�監??
+class UIController {
+    constructor(game, transport) {
+        this.game = game;
+        this.transport = transport;
+        this.qrcode = null;
+        this.codeReader = null;
+        this.myRole = null;
+        this.isScanning = false;
+        this.hostOfferSignal = null;
+        this.hostPeer = null;
+        this.pendingCandidates = null;
+        
+        // 檢查ZXing庫是?��???        if (typeof ZXing === 'undefined') {
+            console.error('ZXing 庫未載入�?);
+        } else {
+            console.log('ZXing 庫�??��???);
+        }
+        
+        // 檢查SimplePeer庫是?��???        if (typeof SimplePeer === 'undefined') {
+            console.error('SimplePeer 庫未載入！這�?導致?�入?��??�能?��?使用');
+            this.showSimplePeerError();
+        } else {
+            console.log('SimplePeer 庫�??��???);
+        }
+        
+        this.setupEventListeners();
+        this.setupQRCode();
+        this.setupGameEventHandlers();
+        this.setupErrorHandling();
+    }
+
+    setupEventListeners() {
+        // 主選?��???        document.getElementById('btnHost').addEventListener('click', () => this.createRoom());
+        document.getElementById('btnJoin').addEventListener('click', () => this.joinRoom());
+
+        // ?�票?��?
+        document.getElementById('btnVoteSuccess').addEventListener('click', () => this.vote(true));
+        document.getElementById('btnVoteFail').addEventListener('click', () => this.vote(false));
+
+        // ?��??�入?��?（只綁�?一次�?
+        const btnManualJoin = document.getElementById('btnManualJoin');
+        const manualQrInput = document.getElementById('manualQrInput');
+        if (btnManualJoin && manualQrInput) {
+            btnManualJoin.addEventListener('click', () => {
+                const input = manualQrInput.value.trim();
+                if (!input) {
+                    this.showScanError('請貼上QR碼內�?, { message: '請貼上QR碼內�? });
+                    return;
+                }
+                this.handleManualJoin(input);
+            });
+            manualQrInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    btnManualJoin.click();
+                }
+            });
+        }
+
+        // 返�?QR碼�???        const btnBackToQR = document.getElementById('btnBackToQR');
+        if (btnBackToQR) {
+            btnBackToQR.addEventListener('click', () => {
+                this.stopScanning();
+                this.hideElement('scanContainer');
+                // ?��?身份決�?返�?路�?
+                if (this.transport.isHostPlayer()) {
+                    // ?�主：�??�QR碼�???                    this.showElement('qrContainer');
+                } else {
+                    // ?�入?��?返�?主選??                    this.showElement('mainMenu');
+                }
+            });
+        }
+
+        // 返�??��??��?
+        const btnBackToRoom = document.getElementById('btnBackToRoom');
+        if (btnBackToRoom) {
+            btnBackToRoom.addEventListener('click', () => {
+                this.hideElement('qrContainer');
+                this.showRoomArea();
+            });
+        }
+
+        // ?��??�?��???        const btnAddPlayer = document.getElementById('btnAddPlayer');
+        if (btnAddPlayer) {
+            btnAddPlayer.addEventListener('click', () => this.startHostScanning());
+        }
+
+        const btnStartGame = document.getElementById('btnStartGame');
+        if (btnStartGame) {
+            btnStartGame.addEventListener('click', () => this.startGame());
+        }
+
+        // ?�戲?��??�?��???        const btnViewGame = document.getElementById('btnViewGame');
+        if (btnViewGame) {
+            btnViewGame.addEventListener('click', () => this.showGameView());
+        }
+
+        // ?�戲?��??�?��???        const btnBackToGame = document.getElementById('btnBackToGame');
+        if (btnBackToGame) {
+            btnBackToGame.addEventListener('click', () => this.showGameOperation());
+        }
+
+        // ?��??�天
+        const btnSendMessage = document.getElementById('btnSendMessage');
+        const roomChatInput = document.getElementById('roomChatInput');
+        if (btnSendMessage && roomChatInput) {
+            btnSendMessage.addEventListener('click', () => this.sendRoomMessage());
+            roomChatInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    this.sendRoomMessage();
+                }
+            });
+        }
+
+        // ?��??��?（�??�主?��?�?        const btnScan = document.getElementById('btnScan');
+        if (btnScan) {
+            btnScan.addEventListener('click', () => {
+                this.hideElement('qrContainer');
+                this.showElement('scanContainer');
+                this.startScanning();
+            });
+        }
+    }
+
+    setupQRCode() {
+        const qrElement = document.getElementById('qr');
+        if (!qrElement) {
+            console.error('QR碼�?素�?存在，無法�?始�?QRCode');
+            return;
+        }
+        
+        this.qrcode = new QRCode("qr", {
+            width: 240,
+            height: 240,
+            colorDark: "#000000",
+            colorLight: "#ffffff",
+            correctLevel: QRCode.CorrectLevel.L
+        });
+    }
+
+    setupGameEventHandlers() {
+        // ?�戲事件?��?
+        this.game.onGameEvent('playerJoined', (data) => {
+            this.addChatMessage(`${data.player.name} ?�入了�??�`);
+            this.addRoomMessage(`${data.player.name} ?�入了房?�`);
+            this.updateRoomStatus();
+            this.updateRoomPlayerList();
+        });
+
+        this.game.onGameEvent('rolesAssigned', (data) => {
+            this.addChatMessage('角色?��?完�?�?);
+            this.addRoomMessage('?�戲?��?！�??��??��???);
+            this.showGameOperationArea();
+        });
+
+        this.game.onGameEvent('missionStarted', (data) => {
+            this.addChatMessage(`�?{data.missionNumber}輪任?��?始�??��?{data.missionSize}?��??�`);
+            this.updateGamePhase();
+        });
+
+        this.game.onGameEvent('votingStarted', (data) => {
+            this.addChatMessage('?��??�票�?);
+            this.updateGamePhase();
+        });
+
+        this.game.onGameEvent('voteReceived', (data) => {
+            this.addChatMessage(`?�到?�票: ${data.vote.vote ? '?��?' : '失�?'}`);
+        });
+
+        this.game.onGameEvent('missionCompleted', (data) => {
+            this.addChatMessage(`�?{data.missionNumber}輪任?? ${data.success ? '?��?' : '失�?'}`);
+            this.updateGamePhase();
+        });
+
+        this.game.onGameEvent('gameEnded', (data) => {
+            this.addChatMessage(`?�戲結�?�?{data.winner === 'good' ? '好人' : '壞人'}?��?！`);
+            this.addRoomMessage(`?�戲結�?�?{data.winner === 'good' ? '好人' : '壞人'}?��?！`);
+        });
+
+        this.game.onGameEvent('assassinationCompleted', (data) => {
+            const result = data.assassinWins ? '?�客?��??�殺梅�?！�?人�?終獲?��?' : '?�客?�殺失�?！好人�?終獲?��?';
+            this.addChatMessage(result);
+            this.addRoomMessage(result);
+        });
+    }
+
+    // ?�建?��?
+    async createRoom() {
+        this.transport.setHostStatus(true);
+        this.hideElement('mainMenu');
+        this.showRoomArea();
+        
+        try {
+            // 檢查SimplePeer?�否?�用
+            if (typeof SimplePeer === 'undefined') {
+                throw new Error('SimplePeer 庫未載入，�?檢查網路??��');
+            }
+            
+            // ?�主?�建一?�peer並�?存�??�於後�??��?answer
+            console.log('?�主?�建WebRTC peer...');
+            this.hostPeer = new SimplePeer({ 
+                initiator: true, 
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'stun:stun2.l.google.com:19302' },
+                        { urls: 'stun:stun3.l.google.com:19302' },
+                        { urls: 'stun:stun4.l.google.com:19302' }
+                    ]
+                }
+            });
+            
+            console.log('?�主peer?�建完�?，�?始信令�???', this.hostPeer.signalingState);
+            this.setupPeer(this.hostPeer);
+            
+            this.hostPeer.on('signal', (data) => {
+                // ?�主?�送offer信�?
+                if (data.type === 'offer') {
+                    console.log('?�主?��?offer信�?');
+                    console.log('?��?信令?�??', this.hostPeer.signalingState);
+                    console.log('?��???��?�??', this.hostPeer.connectionState);
+                    
+                    const compressed = LZString.compressToBase64(JSON.stringify(data));
+                    
+                    // 檢查QRCode?�否?�用
+                    if (this.qrcode) {
+                        this.qrcode.makeCode(compressed);
+                    }
+                    
+                    // 檢查QR碼�?字�?素是?��???                    const qrTextElement = document.getElementById('qrText');
+                    if (qrTextElement) {
+                        qrTextElement.textContent = compressed;
+                    }
+                    
+                    const qrTitleElement = document.getElementById('qrTitle');
+                    if (qrTitleElement) {
+                        qrTitleElement.textContent = '請�??��??�家?��?此QR碼�???;
+                    }
+                    
+                    // 保�?offer信�?，�?後�?使用
+                    this.hostOfferSignal = data;
+                }
+            });
+
+            this.hostPeer.on('connect', () => {
+                console.log('?�家??��?��?');
+                console.log('?�終信令�???', this.hostPeer.signalingState || 'undefined');
+                console.log('?�終�?��?�??', this.hostPeer.connectionState || 'undefined');
+                this.addChatMessage('?�家已�?��');
+                this.addRoomMessage('?�家已�?��');
+                // ??��建�?後�??�止?��?並�??�房?��???                this.stopScanning();
+                this.hideElement('qrContainer');
+                this.hideElement('scanContainer');
+                this.showRoomArea();
+            });
+
+            this.hostPeer.on('error', (err) => {
+                console.error('?�主peer?�誤:', err);
+                this.logError('?�主Peer?�誤', `?�主??��?�誤: ${err.message}`, err.stack);
+                this.addChatMessage(`?�主??��?�誤: ${err.message}`);
+                
+                // 如�??��?��失�?，�?供�?試選??                if (err.message.includes('Connection failed')) {
+                    this.addChatMessage('建議：�?檢查網路??��，�??�試?�新?�建?��?');
+                }
+            });
+            
+        } catch (error) {
+            console.error('?�建?��?失�?:', error);
+            this.logError('?�建?��??�誤', `?�建?��?失�?: ${error.message}`, error.stack);
+            // 顯示?�誤信息給用??            this.showElement('mainMenu');
+            this.hideElement('roomArea');
+        }
+    }
+
+    // ?�主?��??�能 - 顯示QR碼�???    async startHostScanning() {
+        console.log('?�主?��??��?流�?');
+        this.hideElement('roomArea');
+        this.showElement('qrContainer');
+        
+        // ?�置QR碼�??��??��?
+        const btnBackToRoom = document.getElementById('btnBackToRoom');
+        const btnScan = document.getElementById('btnScan');
+        const qrTitle = document.getElementById('qrTitle');
+        
+        if (btnBackToRoom) btnBackToRoom.style.display = 'inline-block';
+        if (btnScan) btnScan.style.display = 'inline-block';
+        if (qrTitle) qrTitle.textContent = '請其他玩家�??�此QR碼�??��???;
+        
+        // ?��??��?offer信�?
+        if (this.hostPeer) {
+            this.hostPeer.on('signal', (data) => {
+                if (data.type === 'offer') {
+                    console.log('?�主?��??��?offer信�?');
+                    const compressed = LZString.compressToBase64(JSON.stringify(data));
+                    
+                    if (this.qrcode) {
+                        this.qrcode.makeCode(compressed);
+                    }
+                    
+                    const qrTextElement = document.getElementById('qrText');
+                    if (qrTextElement) {
+                        qrTextElement.textContent = compressed;
+                    }
+                }
+            });
+        }
+    }
+
+    // ?�入?��?
+    async joinRoom() {
+        console.log('?��??�入?��?流�?');
+        try {
+            this.hideElement('mainMenu');
+            this.showElement('scanContainer');
+            
+            // 清空?��?輸入欄�?
+            const manualQrInput = document.getElementById('manualQrInput');
+            if (manualQrInput) manualQrInput.value = '';
+            
+            console.log('?��??��?流�?');
+            await this.startScanning();
+        } catch (error) {
+            this.logError('?�入?��??�誤', `?�入?��?失�?: ${error.message}`, error.stack);
+            console.error('?��??�誤:', error);
+            this.showScanError('?��?失�?，�?檢查?��?權�??��?�?, error);
+        }
+    }
+
+    // ?��?貼�?QR碼內容�???    async handleManualJoin(qrText) {
+        const statusElement = document.getElementById('scanStatus');
+        const errorElement = document.getElementById('scanError');
+        const resultElement = document.getElementById('scanResult');
+        const scanIndicator = document.getElementById('scanIndicator');
+        const feedbackText = document.getElementById('feedbackText');
+        const scanProgress = document.getElementById('scanProgress');
+        try {
+            statusElement.textContent = '�?���???��?輸入?�QR碼內�?..';
+            scanIndicator.className = 'scan-indicator scanning';
+            feedbackText.textContent = '�?���??...';
+            feedbackText.style.color = '#ffd93d';
+            scanProgress.innerHTML = '<div class="scan-progress-fill" style="width: 60%;"></div>';
+
+            // �??流�??��??��???            const decompressed = LZString.decompressFromBase64(qrText);
+            if (!decompressed) {
+                throw new Error('QR碼格式錯誤�?請確認是?�瓦?��??�產?��?QR�?);
+            }
+            const data = JSON.parse(decompressed);
+            if (!data || typeof data !== 'object') {
+                throw new Error('QR碼內容無法解?��?請�??�貼�?);
+            }
+            
+            // 檢查?�否?�信?�數�?            if (Array.isArray(data)) {
+                console.log(`?��??�入：收??${data.length} ?�信?�`);
+                this.processSignalArray(data);
+            } else {
+                // ?�個信??                if (data.type !== 'offer') {
+                    throw new Error('不是?��??�offer信�?');
+                }
+                this.processSingleSignal(data);
+            }
+            
+        } catch (e) {
+            this.logError('�???�誤', `?��?QR碼解?�失?? ${e.message}`);
+            resultElement.innerHTML = `
+                <div style="background: #f8d7da; color: #721c24; padding: 10px; border-radius: 5px; margin: 10px 0;">
+                    <strong>�??失�?:</strong> ${e.message}
+                </div>
+            `;
+            scanIndicator.className = 'scan-indicator';
+            feedbackText.textContent = '??�??失�?';
+            feedbackText.style.color = '#ff6b6b';
+            scanProgress.innerHTML = '';
+        }
+    }
+
+    // ?��?信�??��?
+    processSignalArray(signals) {
+        if (typeof SimplePeer === 'undefined') {
+            this.logError('SimplePeer庫�???, `SimplePeer庫�??�失?�`);
+            throw new Error('SimplePeer 庫未載入');
+        }
+
+        // ?�濾?��?證信??        const validSignals = signals.filter((signal, index) => {
+            if (!signal || typeof signal !== 'object') {
+                console.log(`跳�??��?信�? ${index + 1}: 不是對象`);
+                return false;
+            }
+            
+            if (!signal.type) {
+                console.log(`跳�??��?信�? ${index + 1}: 缺�?type屬性`);
+                return false;
+            }
+            
+            // 驗�?信�?類�?
+            const validTypes = ['offer', 'answer', 'candidate'];
+            if (!validTypes.includes(signal.type)) {
+                console.log(`跳�??��?信�? ${index + 1}: ?�知類�? ${signal.type}`);
+                return false;
+            }
+            
+            return true;
+        });
+
+        console.log(`?�濾後�??�信?�數?? ${validSignals.length}/${signals.length}`);
+
+        // ?�建peer
+        const peer = new SimplePeer({ 
+            initiator: false, 
+            config: {
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    { urls: 'stun:stun2.l.google.com:19302' },
+                    { urls: 'stun:stun3.l.google.com:19302' },
+                    { urls: 'stun:stun4.l.google.com:19302' }
+                ]
+            }
+        });
+        this.setupPeer(peer);
+        console.log('?��??�入?�創建peer完�?');
+
+        // ?��??��?信�?
+        validSignals.forEach((signal, index) => {
+            console.log(`?��?信�? ${index + 1}/${validSignals.length}: ${signal.type}`);
+            try {
+                peer.signal(signal);
+                console.log(`信�? ${signal.type} ?��??��?`);
+            } catch (error) {
+                console.log(`信�? ${signal.type} ?��?失�?: ${error.message}`);
+            }
+        });
+    }
+
+    // ?��??�個信??    processSingleSignal(signal) {
+        if (typeof SimplePeer === 'undefined') {
+            this.logError('SimplePeer庫�???, `SimplePeer庫�??�失?�`);
+            throw new Error('SimplePeer 庫未載入');
+        }
+
+        console.log(`?��??�個信?? ${signal.type}`);
+        
+        const peer = new SimplePeer({ 
+            initiator: false, 
+            config: {
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    { urls: 'stun:stun2.l.google.com:19302' },
+                    { urls: 'stun:stun3.l.google.com:19302' },
+                    { urls: 'stun:stun4.l.google.com:19302' }
+                ]
+            }
+        });
+        this.setupPeer(peer);
+        console.log('?��??�入?�創建peer完�?');
+        
+        try {
+            peer.signal(signal);
+            console.log(`信�? ${signal.type} ?��??��?`);
+        } catch (error) {
+            console.log(`信�? ${signal.type} ?��?失�?: ${error.message}`);
+        }
+    }
+
+    // ?��??��? - 使用qr-test.html?��?�?    async startScanning() {
+        if (this.isScanning) {
+            console.log('?��??�已?��?行中，忽?��?複�?�?);
+            return;
+        }
+
+        const statusElement = document.getElementById('scanStatus');
+        const errorElement = document.getElementById('scanError');
+        const resultElement = document.getElementById('scanResult');
+        const videoElement = document.getElementById('scan');
+        const retryButton = document.getElementById('retryScan');
+        const btnBackToQR = document.getElementById('btnBackToQR');
+        const scanIndicator = document.getElementById('scanIndicator');
+        const feedbackText = document.getElementById('feedbackText');
+        const scanProgress = document.getElementById('scanProgress');
+        
+        // 清除之�??�錯誤�?結�?
+        errorElement.style.display = 'none';
+        errorElement.innerHTML = '';
+        resultElement.innerHTML = '';
+        retryButton.style.display = 'none';
+        btnBackToQR.style.display = 'none';
+        
+        // ?�置?��?顯示
+        if (this.transport.isHostPlayer()) {
+            // ?�主模�?：顯示�??��??��?返�??��?
+            retryButton.style.display = 'inline-block';
+            btnBackToQR.style.display = 'inline-block';
+            btnBackToQR.textContent = '??返�?QR�?;
+            statusElement.textContent = '?�主?��?模�? - 請�??�玩家�???��QR�?;
+        } else {
+            // ?�入?�模式�?顯示?�新?��??��??��???            retryButton.style.display = 'inline-block';
+            btnBackToQR.style.display = 'inline-block';
+            btnBackToQR.textContent = '??返�?主選??;
+            statusElement.textContent = '請�??�房主�?QR碼�??��???;
+        }
+        
+        // 綁�??�新?��??��?事件
+        retryButton.addEventListener('click', () => {
+            console.log('點�??�新?��??��?');
+            this.startScanning();
+        });
+        
+        // ?��??��??��?�?        scanIndicator.className = 'scan-indicator';
+        feedbackText.textContent = '請�?QR碼�?準�??��?框內';
+        scanProgress.innerHTML = '';
+        
+        try {
+            this.isScanning = true;
+            console.log('?��??��?流�?');
+            statusElement.textContent = '�?��檢查?��??�庫...';
+            
+            // 檢查 ZXing ?�否?�用
+            if (typeof ZXing === 'undefined') {
+                throw new Error('ZXing 庫未載入，�?檢查網路??��');
+            }
+
+            console.log('?�建ZXing?��???);
+            statusElement.textContent = '�?��?�建?��???..';
+            
+            // ?�建 ZXing ?��??�實�?            this.codeReader = new ZXing.BrowserMultiFormatReader();
+            
+            console.log('?��??��???);
+            statusElement.textContent = '�?��?��??��?...';
+            
+            // ?��??��???            await this.codeReader.decodeFromVideoDevice(
+                null, // 使用?�設?��?
+                videoElement,
+                (result, error) => {
+                    if (result) {
+                        // ?��??��?
+                        const decodedText = result.getText();
+                        console.log('QR?��??��?:', decodedText.substring(0, 50) + '...');
+                        statusElement.textContent = '?��??��?�?;
+                        
+                        // 顯示?��??��??��?
+                        scanIndicator.className = 'scan-indicator detected';
+                        feedbackText.textContent = '??QR碼�??��??��?�?��?��?...';
+                        feedbackText.style.color = '#00b894';
+                        
+                        // 顯示?�度�?                        scanProgress.innerHTML = '<div class="scan-progress-fill" style="width: 100%;"></div>';
+                        
+                        // ?�試�??資�?
+                        try {
+                            console.log('�??QR碼�???);
+                            const decompressed = LZString.decompressFromBase64(decodedText);
+                            if (!decompressed) {
+                                throw new Error('QR碼格式錯誤�?請確認是?�瓦?��??�產?��?QR�?);
+                            }
+                            const data = JSON.parse(decompressed);
+                            if (!data || typeof data !== 'object') {
+                                throw new Error('QR碼內容無法解?��?請�??��???);
+                            }
+                            console.log('�???��?，�??��???', data.type || 'unknown');
+                            
+                            // ?��?信�?類�??��?
+                            if (data.type === 'offer') {
+                                // ?�入?�收?�房主�?offer
+                                console.log('?�入?�收?�房主offer');
+                                console.log('?�入?�收?�offer?��?信令?�?? 尚未?�建peer');
+                                
+                                this.logError('SimplePeer庫�???, `SimplePeer庫�??��??�`);
+                                if (typeof SimplePeer === 'undefined') {
+                                    this.logError('SimplePeer庫�???, `SimplePeer庫�??�失?�`);
+                                    throw new Error('SimplePeer 庫未載入');
+                                }
+                                const peer = new SimplePeer({ 
+                                    initiator: false, 
+                                    config: {
+                                        iceServers: [
+                                            { urls: 'stun:stun.l.google.com:19302' },
+                                            { urls: 'stun:stun1.l.google.com:19302' },
+                                            { urls: 'stun:stun2.l.google.com:19302' },
+                                            { urls: 'stun:stun3.l.google.com:19302' },
+                                            { urls: 'stun:stun4.l.google.com:19302' }
+                                        ]
+                                    }
+                                });
+                                this.setupPeer(peer);
+                                console.log('?�入?�創建peer完�?');
+                                console.log('?�入?�peer?��?信令?�??', peer.signalingState);
+                                
+                                console.log('?�送信?��???);
+                                this.logError('?�送信?��???, `?�送信?��??? ${peer || 'unknown'}`);
+            
+            // 顯示?��?中�???            scanIndicator.className = 'scan-indicator scanning';
+            feedbackText.textContent = '?? ?��??�已?��?，�?將QR碼�?準�??��?�?;
+            feedbackText.style.color = '#ffd93d';
+
+        } catch (error) {
+            this.logError('?��??�誤', `?��??��??�失?? ${error.message}`, error.stack);
+            console.error('?��??��??�失??', error);
+            this.isScanning = false;
+            statusElement.textContent = '?��??��??�失??;
+            
+            // 顯示?�誤?�??            scanIndicator.className = 'scan-indicator';
+            feedbackText.textContent = '???��??��??�失??;
+            feedbackText.style.color = '#ff6b6b';
+            scanProgress.innerHTML = '';
+            
+            // ?��??��?顯示詳細?�誤
+            let errorMessage = error.message;
+            let errorDetails = '';
+            let solution = '';
+
+            // ?��??�誤類�??��??��?建議
+            if (error.name === 'NotAllowedError') {
+                errorMessage = '?��?權�?被�?�?;
+                errorDetails = '?�覽?��?絕�??��?權�?請�?';
+                solution = '請�??�網?�?�左?��??��??�示?�許權�?，�??�新載入?�面';
+            } else if (error.name === 'NotFoundError') {
+                errorMessage = '?��??�相機設??;
+                errorDetails = '系統?��??�到?�用?�相機設??;
+                solution = '請確認設?��??��?，�?沒�?被其他�??��?式使??;
+            } else if (error.name === 'NotSupportedError') {
+                errorMessage = '?�覽?��??�援?��??�能';
+                errorDetails = '?��??�覽?��??�援getUserMedia API';
+                solution = '請使?�Chrome?�Firefox?�Safari?�Edge?�覽??;
+            } else if (error.name === 'NotReadableError') {
+                errorMessage = '?��?被其他�??��?式�???;
+                errorDetails = '?��?�?��被其他�??��?式使??;
+                solution = '請�??�其他使?�相機�??�用程�?（�??��??��?訊通話等�?';
+            } else if (error.name === 'OverconstrainedError') {
+                errorMessage = '?��??�置不支??;
+                errorDetails = '請�??�相機�?置�?被設?�支??;
+                solution = '請�?試�??��??��??��?使用不�??�瀏覽??;
+            } else if (error.message.includes('ZXing')) {
+                errorMessage = '?��??�庫載入失�?';
+                errorDetails = '?��?載入ZXing�?;
+                solution = '請檢?�網路�?��，�??��??��???;
+            } else if (error.message.includes('HTTPS')) {
+                errorMessage = '?�要HTTPS??��';
+                errorDetails = '?��??�能?�要�??��?HTTPS??��';
+                solution = '請使?�HTTPS網�??�localhost';
+            } else if (error.message.includes('permission')) {
+                errorMessage = '權�??��?';
+                errorDetails = error.message;
+                solution = '請在?�覽?�設定中?�許?��?權�?';
+            } else if (error.message.includes('decodeFromVideoDevice')) {
+                errorMessage = '?��??��??�失??;
+                errorDetails = 'ZXing?��??��?中發?�錯�?;
+                solution = '請�?試�??��??��??��?使用不�??�瀏覽??;
+            }
+
+            // 顯示?�誤訊息
+            errorElement.innerHTML = `
+                <div style="background: #f8d7da; color: #721c24; padding: 15px; border-radius: 5px;">
+                    <strong>?�誤類�?:</strong> ${errorMessage}<br>
+                    <strong>?�誤詳�?:</strong> ${errorDetails}<br>
+                    <strong>�?��?��?:</strong> ${solution}<br>
+                    <strong>?�誤?�稱:</strong> ${error.name}<br>
+                    <strong>完整?�誤:</strong><br>
+                    <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 3px; padding: 10px; margin: 10px 0; font-family: monospace; font-size: 12px; overflow-x: auto;">${error.stack || error.message}</div>
+                </div>
+            `;
+            errorElement.style.display = 'inline-block';
+            retryButton.style.display = 'inline-block';
+        }
+    }
+
+    // ?�止?��?
+    stopScanning() {
+        const statusElement = document.getElementById('scanStatus');
+        const videoElement = document.getElementById('scan');
+        
+        if (this.codeReader && this.isScanning) {
+            this.codeReader.reset();
+        }
+        
+        // ?�止?��?�?        if (videoElement.srcObject) {
+            const stream = videoElement.srcObject;
+            stream.getTracks().forEach(track => track.stop());
+            videoElement.srcObject = null;
+        }
+        
+        this.isScanning = false;
+        statusElement.textContent = '?��?已�?�?;
+        console.log('?��?流�?結�?');
+    }
+
+    // 顯示?��??�誤
+    showScanError(message, error) {
+        const statusElement = document.getElementById('scanStatus');
+        const retryButton = document.getElementById('retryScan');
+        const errorElement = document.getElementById('scanError');
+        
+        statusElement.textContent = message;
+        statusElement.style.color = '#dc3545';
+        retryButton.style.display = 'inline-block';
+        
+        if (error) {
+            errorElement.innerHTML = `
+                <div style="background: #f8d7da; color: #721c24; padding: 15px; border-radius: 5px;">
+                    <strong>?�誤詳�?:</strong> ${error.message}
+                </div>
+            `;
+            errorElement.style.display = 'inline-block';
+        }
+    }
+
+    // 設置對�???��
+    setupPeer(peer) {
+        console.log('?��?設置WebRTC??��');
+        console.log('設置peer?��?信令?�??', peer.signalingState || 'undefined');
+
+        // ?��??�pendingCandidates
+        if (!this.pendingCandidates) {
+            this.pendingCandidates = [];
+        }
+
+        // 將peer添�??�transport�?        this.transport.addPeer(peer);
+
+        peer.on('signal', (data) => {
+            console.log('?�送信??', data.type || 'unknown');
+            console.log('?�送信?��??�信令�???', peer.signalingState || 'undefined');
+            
+            if (data.type === 'offer') {
+                // ?�主?��?offer信�?
+                console.log('?�主?��?offer信�?');
+                const compressed = LZString.compressToBase64(JSON.stringify(data));
+                
+                // 檢查QRCode?�否?�用
+                if (this.qrcode) {
+                    this.qrcode.makeCode(compressed);
+                }
+                
+                // 檢查QR碼�?字�?素是?��???                const qrTextElement = document.getElementById('qrText');
+                if (qrTextElement) {
+                    qrTextElement.textContent = compressed;
+                }
+                
+                this.addChatMessage('已�??��?��QR碼�?請�??��??�家?��?');
+                
+            } else if (data.type === 'answer') {
+                // ?�入?��??�answer信�?
+                console.log('?�入?�發?�answer信�?給房�?);
+                console.log('?�送answer?��?信令?�??', peer.signalingState || 'undefined');
+                
+                const compressed = LZString.compressToBase64(JSON.stringify(data));
+                
+                // 檢查QRCode?�否?�用
+                if (this.qrcode) {
+                    this.qrcode.makeCode(compressed);
+                }
+                
+                // 檢查QR碼�?字�?素是?��???                const qrTextElement = document.getElementById('qrText');
+                if (qrTextElement) {
+                    qrTextElement.textContent = compressed;
+                }
+                
+                // 顯示QR碼給?�主?��?
+                this.hideElement('scanContainer');
+                this.showElement('qrContainer');
+                
+                const qrTitleElement = document.getElementById('qrTitle');
+                if (qrTitleElement) {
+                    qrTitleElement.textContent = '請�??�主?��?此QR碼�??��?��';
+                }
+                
+                this.addChatMessage('已�??��?��QR碼�?請�??�主?��?');
+                
+            } else if (data.type === 'candidate') {
+                // ICE?�選信�?，�?要即?�交??                const candidateInfo = data.candidate ? 
+                    (data.candidate.substring ? data.candidate.substring(0, 50) + '...' : String(data.candidate).substring(0, 50) + '...') : 
+                    'null';
+                console.log(`?��?ICE?�選信�?: ${candidateInfo}`);
+                
+                // 將ICE?�選信�?添�??��??�送�?�?                this.pendingCandidates.push(data);
+                
+                // ?�新信�?顯示
+                this.updateSignalDisplay();
+            }
+        });
+
+        peer.on('connect', () => {
+            console.log('WebRTC??��建�??��?');
+            console.log('??��建�??��?信令?�??', peer.signalingState || 'undefined');
+            console.log('??��建�??��???��?�??', peer.connectionState || 'undefined');
+            this.addChatMessage('WebRTC??��已建�?);
+            
+            // ??��建�?後�??�止?��?
+            console.log('?��?UI?��?...');
+            this.stopScanning();
+            console.log('?��?已�?�?);
+            
+            this.hideElement('qrContainer');
+            console.log('QR容器已隱??);
+            
+            this.hideElement('scanContainer');
+            console.log('?��?容器已隱??);
+            
+            // ?��?角色顯示不�??�??            if (this.transport.isHostPlayer()) {
+                // ?�主保�??�房?��???                this.showRoomArea();
+                console.log('?�主保�??�房?��???);
+            } else {
+                // ?�入?�進入?��??�??                this.showRoomArea();
+                console.log('?�入?�進入?��??�??);
+                
+                // ?�入?�通知?�主已�???                this.transport.send({
+                    type: 'player_joined',
+                    playerId: this.transport.getCurrentPlayerId(),
+                    playerName: '?�家' + this.transport.getCurrentPlayerId().substr(-4)
+                });
+            }
+        });
+
+        peer.on('error', (err) => {
+            console.error('WebRTC??��?�誤:', err);
+            console.error('?�誤?��??��?信令?�??', peer.signalingState || 'undefined');
+            console.error('?�誤?��??��???��?�??', peer.connectionState || 'undefined');
+            
+            // ?��??�誤類�??��??�具體�??�誤信息
+            let errorMessage = 'WebRTC??��?�誤';
+            if (err.message.includes('Failed to set remote answer sdp')) {
+                errorMessage = '?��??�送answer信�?，�??�新?��???��';
+            } else if (err.message.includes('Failed to set remote offer sdp')) {
+                errorMessage = '?��??�送offer信�?，�??�新?��???��';
+            } else if (err.message.includes('ICE')) {
+                errorMessage = '網路??��?��?，�?檢查網路設置';
+            } else if (err.message.includes('signaling')) {
+                errorMessage = '信令交�?失�?，�??�新?�試??��';
+            } else if (err.message.includes('peer')) {
+                errorMessage = '對�???��失�?，�??�新?��?QR�?;
+            } else if (err.message.includes('Connection failed')) {
+                errorMessage = '??��建�?失�?，可?�是網路?��??�防?��??��?';
+            }
+            
+            this.logError('Peer?�誤', `${errorMessage}: ${err.message}`, err.stack);
+            
+            // ?��??�試?��?
+            this.addChatMessage(`??��失�?: ${errorMessage}`);
+            
+            // 如�??��?複信?�錯誤�?建議?�置
+            if (err.message.includes('Failed to set remote')) {
+                console.log('建議：�??��?始�?��');
+                this.addChatMessage('建議?�新?��???��');
+            }
+        });
+
+        peer.on('close', () => {
+            console.log('WebRTC??��已�???);
+            console.log('??��?��??��?信令?�??', peer.signalingState || 'undefined');
+            this.addChatMessage('WebRTC??��已�???);
+        });
+
+        // 添�?ICE??��?�?�監??        peer.on('iceStateChange', (state) => {
+            console.log(`ICE??��?�?��??? ${state}`);
+        });
+
+        // 添�???��?�?��??�監??        if (peer.connectionState !== undefined) {
+            peer.on('connectionStateChange', () => {
+                console.log('??��?�?��???', peer.connectionState);
+                console.log('信令?�??', peer.signalingState || 'undefined');
+                
+                switch (peer.connectionState) {
+                    case 'new':
+                        console.log('??��?��??�中...');
+                        break;
+                    case 'connecting':
+                        console.log('�?��建�???��...');
+                        this.addChatMessage('�?��建�???��...');
+                        break;
+                    case 'connected':
+                        console.log('??��已建�?);
+                        this.addChatMessage('??��已建�?);
+                        break;
+                    case 'disconnected':
+                        console.log('??��已斷??);
+                        this.addChatMessage('??��已斷?��??�試?�新??��...');
+                        break;
+                    case 'failed':
+                        console.log('??��失�?');
+                        this.addChatMessage('??��失�?，�??�新?�試');
+                        break;
+                    case 'closed':
+                        console.log('??��已�???);
+                        this.addChatMessage('??��已�???);
+                        break;
+                }
+            });
+        }
+
+        // 添�?信令?�?��??�監??        if (peer.signalingState !== undefined) {
+            peer.on('signalingStateChange', () => {
+                console.log('信令?�?��???', peer.signalingState);
+                
+                switch (peer.signalingState) {
+                    case 'stable':
+                        console.log('信令?�?�穩�?);
+                        break;
+                    case 'have-local-offer':
+                        console.log('已發?�本?�offer');
+                        break;
+                    case 'have-remote-offer':
+                        console.log('已收?��?程offer');
+                        break;
+                    case 'have-local-pranswer':
+                        console.log('已發?�本?�pranswer');
+                        break;
+                    case 'have-remote-pranswer':
+                        console.log('已收?��?程pranswer');
+                        break;
+                    case 'closed':
+                        console.log('信令?�?�已?��?');
+                        break;
+                }
+            });
+        }
+
+        peer.on('data', (data) => {
+            try {
+                const message = JSON.parse(data);
+                console.log('?�到?��?:', message.type || 'unknown');
+                this.transport.handleMessage(message);
+            } catch (error) {
+                console.error('?��?�??失�?:', error);
+                this.logError('Peer?��??�誤', `?��?�??失�?: ${error.message}`);
+            }
+        });
+    }
+
+    // ?�新信�?顯示
+    updateSignalDisplay() {
+        if (!this.pendingCandidates || this.pendingCandidates.length === 0) return;
+        
+        // ?�濾?��??�ICE?�選信�?
+        const validCandidates = this.pendingCandidates.filter(candidate => {
+            return candidate && candidate.type === 'candidate';
+        });
+        
+        if (validCandidates.length === 0) {
+            console.log('沒�??��??�ICE?�選信�?');
+            this.pendingCandidates = [];
+            return;
+        }
+        
+        // ?�新QR碼顯示�??�含ICE?�選信�?
+        const qrTextElement = document.getElementById('qrText');
+        if (qrTextElement && qrTextElement.textContent) {
+            try {
+                const currentSignal = JSON.parse(LZString.decompressFromBase64(qrTextElement.textContent));
+                if (currentSignal && (currentSignal.type === 'offer' || currentSignal.type === 'answer')) {
+                    const updatedSignals = [currentSignal, ...validCandidates];
+                    const updatedCompressed = LZString.compressToBase64(JSON.stringify(updatedSignals));
+                    
+                    // ?�新QR�?                    if (this.qrcode) {
+                        this.qrcode.makeCode(updatedCompressed);
+                    }
+                    
+                    // ?�新?��?
+                    qrTextElement.textContent = updatedCompressed;
+                    console.log(`信�?已更?��??�含 ${validCandidates.length} ?��??�ICE?�選`);
+                }
+            } catch (error) {
+                console.log(`信�??�新失�?: ${error.message}`);
+            }
+        }
+        
+        // 清空待發?��?表�??��??��?添�?
+        this.pendingCandidates = [];
+    }
+
+    // ?�新?�家?�表
+    updatePlayerList(players) {
+        const playerList = document.getElementById('playerList');
+        if (!playerList) {
+            console.warn('playerList ?��?不�??��?跳�??�新');
+            return;
+        }
+        
+        playerList.innerHTML = '';
+        
+        players.forEach(player => {
+            const playerItem = document.createElement('div');
+            playerItem.className = 'player-item';
+            playerItem.innerHTML = `
+                <span>${player.name}</span>
+                <span>${player.ready ? '?? : '??}</span>
+            `;
+            playerList.appendChild(playerItem);
+        });
+    }
+
+    // 顯示角色?��?
+    showRoleCard(role, isGood, gameInfo) {
+        this.myRole = { role, isGood, gameInfo };
+        
+        const roleName = document.getElementById('roleName');
+        const roleDescription = document.getElementById('roleDescription');
+        
+        if (roleName) {
+            roleName.textContent = this.getRoleName(role);
+        }
+        
+        if (roleDescription) {
+            roleDescription.textContent = this.getRoleDescription(role, isGood, gameInfo);
+        }
+        
+        this.showElement('roleCard');
+        this.showElement('gameArea');
+        this.hideElement('qrContainer');
+    }
+
+    // ?��?角色?�稱
+    getRoleName(role) {
+        const names = {
+            'Merlin': '梅�?',
+            'Percival': '派西維爾',
+            'Loyal Servant': '忠�??��?�?,
+            'Morgana': '?��?�?,
+            'Mordred': '?�德?�德',
+            'Oberon': '奧伯??,
+            'Assassin': '?�客'
+        };
+        return names[role] || role;
+    }
+
+    // ?��?角色?�述
+    getRoleDescription(role, isGood, gameInfo) {
+        const descriptions = {
+            'Merlin': '你知?��??��?人�?身份（除了莫德雷德�?',
+            'Percival': '你知?��??��??��?娜�?身份',
+            'Loyal Servant': '你是忠�??�好�?,
+            'Morgana': '你�?裝是梅�?來迷?�派西維??,
+            'Mordred': '梅�??��??��??�身�?,
+            'Oberon': '你�??��??��?壞人?�身�?,
+            'Assassin': '?�戲結�?後�??�以?�殺梅�?'
+        };
+        return descriptions[role] || '?�知角色';
+    }
+
+    // ?�新?�戲?�??    updateGameState(state, data) {
+        const status = document.getElementById('status');
+        if (!status) {
+            console.warn('status ?��?不�??��?跳�??�新?�戲?�??);
+            return;
+        }
+        
+        switch (state) {
+            case 'WAITING_FOR_PLAYERS':
+                status.textContent = '等�??�家?�入...';
+                break;
+            case 'GAME_START':
+                status.textContent = '?�戲?��?�?;
+                break;
+            case 'MISSION_SELECTION':
+                status.textContent = `�?{data.missionNumber}輪任??- ?��?${data.missionSize}?��??�`;
+                this.updateMissionProgress(data.missionNumber, data.missionSize);
+                break;
+            case 'MISSION_VOTE':
+                status.textContent = '任�??�票�?..';
+                this.showVoteButtons();
+                break;
+            case 'GAME_END':
+                status.textContent = '?�戲結�?�?;
+                break;
+        }
+    }
+
+    // ?�新任�??�度
+    updateMissionProgress(missionNumber, missionSize) {
+        const progressFill = document.getElementById('progressFill');
+        const missionInfo = document.getElementById('missionInfo');
+        
+        const progress = (missionNumber / 5) * 100;
+        progressFill.style.width = `${progress}%`;
+        missionInfo.textContent = `�?{missionNumber}輪任??- ?��?{missionSize}?��??�`;
+        
+        this.showElement('missionProgress');
+    }
+
+    // 顯示?�票?��?
+    showVoteButtons() {
+        this.showElement('voteButtons');
+    }
+
+    // ?��??�票?��?
+    hideVoteButtons() {
+        this.hideElement('voteButtons');
+    }
+
+    // ?�票
+    vote(success) {
+        this.transport.send({
+            type: 'mission_vote',
+            playerId: this.transport.getCurrentPlayerId(),
+            vote: success
+        });
+        
+        this.hideVoteButtons();
+        this.addChatMessage(`你�?�? ${success ? '?��?' : '失�?'}`);
+    }
+
+    // 添�??�天訊息
+    addChatMessage(message) {
+        const chatMessages = document.getElementById('chatMessages');
+        if (!chatMessages) {
+            console.warn('chatMessages ?��?不�??��?跳�?添�??�天訊息');
+            return;
+        }
+        
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'chat-message';
+        messageDiv.textContent = message;
+        chatMessages.appendChild(messageDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    // 顯示?��?
+    showElement(elementId) {
+        document.getElementById(elementId).classList.remove('hidden');
+    }
+
+    // ?��??��?
+    hideElement(elementId) {
+        document.getElementById(elementId).classList.add('hidden');
+    }
+
+    showSimplePeerError() {
+        const mainMenu = document.getElementById('mainMenu');
+        if (!mainMenu) {
+            console.error('mainMenu ?��?不�??��??��?顯示 SimplePeer ?�誤');
+            return;
+        }
+        
+        const errorDiv = document.createElement('div');
+        errorDiv.style.cssText = `
+            background: #ff6b6b;
+            color: white;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 10px;
+            text-align: center;
+        `;
+        errorDiv.innerHTML = `
+            <h3>?��? 庫�??�失??/h3>
+            <p>SimplePeer 庫�??�失?��??�入?��??�能?�能?��?使用??/p>
+            <p>請�?試�?</p>
+            <ul style="text-align: left; display: inline-block;">
+                <li>?�新載入?�面</li>
+                <li>檢查網路??��</li>
+                <li>使用不�??�瀏覽??/li>
+            </ul>
+            <button onclick="location.reload()" class="btn" style="margin-top: 10px;">?�新載入</button>
+        `;
+        mainMenu.appendChild(errorDiv);
+    }
+
+    setupErrorHandling() {
+        // 設置?��??�誤?��?
+        window.addEventListener('error', (event) => {
+            this.logError('?��??�誤', event.error || event.message, event.error?.stack);
+        });
+
+        window.addEventListener('unhandledrejection', (event) => {
+            this.logError('?��??��?Promise?��?', event.reason, event.reason?.stack);
+        });
+
+        // 設置清除?�誤?��?（�??��??��?
+        const clearErrorsBtn = document.getElementById('clearErrors');
+        if (clearErrorsBtn) {
+            clearErrorsBtn.addEventListener('click', () => {
+                this.clearErrors();
+            });
+        }
+    }
+
+    logError(type, message, stack = null) {
+        const errorContainer = document.getElementById('errorContainer');
+        const errorMessages = document.getElementById('errorMessages');
+        
+        // 如�??�誤容器不�??��??��??�到?�制??        if (!errorContainer || !errorMessages) {
+            console.error(`[${type}] ${message}`, stack);
+            return;
+        }
+        
+        // 顯示?�誤容器
+        errorContainer.classList.remove('hidden');
+        
+        // ?�建?�誤訊息?��?
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'error-message';
+        
+        const time = new Date().toLocaleTimeString();
+        let errorHtml = `<div class="error-time">[${time}] ${type}</div>`;
+        errorHtml += `<div class="error-content">${message}</div>`;
+        
+        if (stack) {
+            errorHtml += `<div class="error-stack">${stack}</div>`;
+        }
+        
+        errorDiv.innerHTML = errorHtml;
+        errorMessages.appendChild(errorDiv);
+        
+        // ?�制?�誤訊息?��?，避?��??��?洩�?
+        const errorElements = errorMessages.children;
+        if (errorElements.length > 10) {
+            errorMessages.removeChild(errorElements[0]);
+        }
+    }
+
+    clearErrors() {
+        const errorMessages = document.getElementById('errorMessages');
+        const errorContainer = document.getElementById('errorContainer');
+        
+        if (errorMessages) {
+            errorMessages.innerHTML = '';
+        }
+        
+        if (errorContainer) {
+            errorContainer.classList.add('hidden');
+        }
+    }
+
+    // 顯示?��??�??    showRoomArea() {
+        this.hideAllAreas();
+        this.showElement('roomArea');
+        
+        // 如�??�房主�?顯示?�主?�制?��?
+        if (this.transport.isHostPlayer()) {
+            this.showElement('hostControls');
+            
+            // 檢查人數?�否?�援，�??��??�援?�隱?��?始�??��???            const gameState = this.game.getGameState();
+            const btnStartGame = document.getElementById('btnStartGame');
+            if (btnStartGame) {
+                if (gameState.isSupported) {
+                    btnStartGame.style.display = 'inline-block';
+                } else {
+                    btnStartGame.style.display = 'none';
+                }
+            }
+        } else {
+            this.hideElement('hostControls');
+        }
+        
+        // ?�新?��??�?��??�家?�表
+        this.updateRoomStatus();
+        this.updateRoomPlayerList();
+    }
+
+    // 顯示?�戲?��??�??    showGameOperationArea() {
+        this.hideAllAreas();
+        this.showElement('gameOperationArea');
+        this.setupGameOperationUI();
+    }
+
+    // 顯示?�戲?��??�??    showGameViewArea() {
+        this.hideAllAreas();
+        this.showElement('gameViewArea');
+        this.updateGameStats();
+    }
+
+    // ?��??�?��???    hideAllAreas() {
+        this.hideElement('mainMenu');
+        this.hideElement('qrContainer');
+        this.hideElement('scanContainer');
+        this.hideElement('gameArea');
+        this.hideElement('roomArea');
+        this.hideElement('gameOperationArea');
+        this.hideElement('gameViewArea');
+    }
+
+    // ?�新?��??�??    updateRoomStatus() {
+        const roomStatus = document.getElementById('roomStatus');
+        let playerCount = this.transport.getConnectedPlayerCount();
+        
+        // 如�??�房主�??��??�主?�己
+        if (this.transport.isHostPlayer()) {
+            playerCount += 1;
+        }
+        
+        const supportedPlayerCounts = [5, 6, 7, 8, 9, 10];
+        const isSupported = supportedPlayerCounts.includes(playerCount);
+        
+        if (playerCount < 5) {
+            roomStatus.textContent = `等�??�家?�入... (${playerCount}/5)`;
+        } else if (playerCount > 10) {
+            roomStatus.textContent = `?��?已滿 (${playerCount}/10)`;
+        } else if (isSupported) {
+            roomStatus.textContent = `準�??��??�戲 (${playerCount}/10)`;
+        } else {
+            roomStatus.textContent = `人數不支??(${playerCount}人�??��?-10�?`;
+        }
+        
+        // 如�??�房主�??�新?��??�戲?��??�顯�?        if (this.transport.isHostPlayer()) {
+            const btnStartGame = document.getElementById('btnStartGame');
+            if (btnStartGame) {
+                if (isSupported) {
+                    btnStartGame.style.display = 'inline-block';
+                } else {
+                    btnStartGame.style.display = 'none';
+                }
+            }
+        }
+    }
+
+    // 設置?�戲?��?UI
+    setupGameOperationUI() {
+        this.updatePlayerAvatars();
+        this.updateGamePhase();
+    }
+
+    // ?�新?�家?��?
+    updatePlayerAvatars() {
+        const leftPlayers = document.getElementById('leftPlayers');
+        const rightPlayers = document.getElementById('rightPlayers');
+        
+        leftPlayers.innerHTML = '';
+        rightPlayers.innerHTML = '';
+        
+        // ?��??�含?�主?��??�玩家�?�?        const gameState = this.game.getGameState();
+        const allPlayers = gameState.players || [];
+        
+        allPlayers.forEach((player, index) => {
+            const avatar = this.createPlayerAvatar(player, index + 1);
+            
+            // ?��??�家?�左?�兩??            if (index < Math.ceil(allPlayers.length / 2)) {
+                leftPlayers.appendChild(avatar);
+            } else {
+                rightPlayers.appendChild(avatar);
+            }
+        });
+    }
+
+    // ?�建?�家?��?
+    createPlayerAvatar(player, number) {
+        const avatar = document.createElement('div');
+        avatar.className = 'player-avatar';
+        avatar.textContent = player.name.charAt(0).toUpperCase();
+        
+        // 添�??�家編�?
+        const numberDiv = document.createElement('div');
+        numberDiv.className = 'player-number';
+        numberDiv.textContent = number;
+        avatar.appendChild(numberDiv);
+        
+        // 如�??��?人�??��??�家?��??��?顯示紅�?
+        if (this.myRole && this.myRole.role === 'Merlin' && !player.isGood) {
+            avatar.classList.add('evil');
+        }
+        
+        return avatar;
+    }
+
+    // ?�新?�戲?�段
+    updateGamePhase() {
+        const gamePhase = document.getElementById('gamePhase');
+        const currentPhaseText = document.getElementById('currentPhaseText');
+        
+        const gameState = this.game.getGameState();
+        
+        switch (gameState.state) {
+            case 'MISSION_SELECTION':
+                gamePhase.textContent = '組�??�段';
+                const missionSize = this.game.getMissionSize ? this.game.getMissionSize(gameState.currentMission, gameState.players.length) : 2;
+                currentPhaseText.textContent = `�?{gameState.currentMission}輪任??- ?��?${missionSize}?��??�`;
+                break;
+            case 'MISSION_VOTE':
+                gamePhase.textContent = '?�票?�段';
+                currentPhaseText.textContent = '請�?任�??�員?��??�票';
+                break;
+            case 'MISSION_EXECUTION':
+                gamePhase.textContent = '?��??�段';
+                currentPhaseText.textContent = '任�??��?�?..';
+                break;
+            default:
+                gamePhase.textContent = '?�戲?��?�?;
+                currentPhaseText.textContent = '等�??�戲?��?...';
+        }
+    }
+
+    // ?�新?�戲統�?
+    updateGameStats() {
+        this.updateMissionStats();
+        this.updateVoteStats();
+        this.updatePlayerStats();
+    }
+
+    // ?�新任�?統�?
+    updateMissionStats() {
+        const missionStats = document.getElementById('missionStats');
+        const gameState = this.game.getGameState();
+        
+        let html = '<div class="stats-row stats-header mission-row">';
+        html += '<div>任�?</div><div>結�?</div><div>?�員</div>';
+        html += '</div>';
+        
+        gameState.missionResults.forEach((result, index) => {
+            html += '<div class="stats-row mission-row">';
+            html += `<div>�?{index + 1}�?/div>`;
+            html += `<div>${result.success ? '???��?' : '??失�?'}</div>`;
+            html += `<div>${result.votes.length}�?/div>`;
+            html += '</div>';
+        });
+        
+        missionStats.innerHTML = html;
+    }
+
+    // ?�新?�票統�?
+    updateVoteStats() {
+        const voteStats = document.getElementById('voteStats');
+        const gameState = this.game.getGameState();
+        
+        let html = '<div class="stats-row stats-header vote-row">';
+        html += '<div>任�?</div><div>贊�?</div><div>?��?</div><div>結�?</div>';
+        html += '</div>';
+        
+        gameState.missionResults.forEach((result, index) => {
+            const successVotes = result.votes.filter(v => v.vote).length;
+            const failVotes = result.votes.filter(v => !v.vote).length;
+            
+            html += '<div class="stats-row vote-row">';
+            html += `<div>�?{index + 1}�?/div>`;
+            html += `<div>${successVotes}</div>`;
+            html += `<div>${failVotes}</div>`;
+            html += `<div>${result.success ? '?��?' : '失�?'}</div>`;
+            html += '</div>';
+        });
+        
+        voteStats.innerHTML = html;
+    }
+
+    // ?�新?�家統�?
+    updatePlayerStats() {
+        const playerStats = document.getElementById('playerStats');
+        const gameState = this.game.getGameState();
+        
+        let html = '<div class="stats-row stats-header player-row">';
+        html += '<div>?�家</div><div>角色</div><div>???</div><div>?�??/div>';
+        html += '</div>';
+        
+        gameState.players.forEach((player, index) => {
+            const role = gameState.roles.find(r => r.playerId === player.id);
+            
+            html += '<div class="stats-row player-row">';
+            html += `<div>${player.name}</div>`;
+            html += `<div>${role ? this.getRoleName(role.role) : '?�知'}</div>`;
+            html += `<div>${role ? (role.isGood ? '好人' : '壞人') : '?�知'}</div>`;
+            html += `<div>${player.ready ? '準�?' : '等�?'}</div>`;
+            html += '</div>';
+        });
+        
+        playerStats.innerHTML = html;
+    }
+
+    // ?��??�戲
+    startGame() {
+        if (this.transport.isHostPlayer()) {
+            // 檢查人數?�否?�援
+            const gameState = this.game.getGameState();
+            if (!gameState.isSupported) {
+                alert(`不支??${gameState.players.length} 人�??��??��?5-10 人`);
+                return;
+            }
+            
+            this.transport.send({
+                type: 'game_action',
+                action: 'start_game'
+            });
+            this.showGameOperationArea();
+        }
+    }
+
+    // ?�送房?��???    sendRoomMessage() {
+        const input = document.getElementById('roomChatInput');
+        const message = input.value.trim();
+        
+        if (message) {
+            this.addRoomMessage(`?? ${message}`);
+            this.transport.send({
+                type: 'room_message',
+                playerId: this.transport.getCurrentPlayerId(),
+                message: message
+            });
+            input.value = '';
+        }
+    }
+
+    // 添�??��?訊息
+    addRoomMessage(message) {
+        const chatMessages = document.getElementById('roomChatMessages');
+        if (!chatMessages) {
+            console.warn('roomChatMessages ?��?不�??��?跳�?添�??��?訊息');
+            return;
+        }
+        
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'chat-message';
+        messageDiv.textContent = message;
+        chatMessages.appendChild(messageDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    // ?�新?��??�家?�表
+    updateRoomPlayerList() {
+        const roomPlayerList = document.getElementById('roomPlayerList');
+        const gameState = this.game.getGameState();
+        const players = gameState.players || [];
+        
+        roomPlayerList.innerHTML = '';
+        
+        // 顯示?�?�玩家�??�括?�主�?        players.forEach((player, index) => {
+            const playerItem = document.createElement('div');
+            playerItem.className = 'room-player-item';
+            
+            playerItem.innerHTML = `
+                <div class="room-player-avatar">${player.name.charAt(0).toUpperCase()}</div>
+                <div class="room-player-name">${player.name}</div>
+                <div class="room-player-status">${player.ready ? '準�?' : '等�?'}</div>
+            `;
+            
+            roomPlayerList.appendChild(playerItem);
+        });
+    }
+
+    // 顯示?�戲?��??�??    showGameView() {
+        this.showGameViewArea();
+    }
+
+    // 顯示?�戲?��??�??    showGameOperation() {
+        this.showGameOperationArea();
+    }
+}
+
+// ==================== ?��???====================
+
+// ?��??��??��?�?document.addEventListener('DOMContentLoaded', () => {
+    console.log('?�瓦?��??��?始�?�?..');
+    
+    // 延遲一點�??�確保�??�腳?�都載入完�?
+    setTimeout(() => {
+        initializeGame();
+    }, 100);
+});
+
+function initializeGame() {
+    // 檢查必�??��??�是?��???    if (typeof TransportLayer === 'undefined') {
+        console.error('TransportLayer 類別?��??��?');
+        return;
+    }
+    
+    if (typeof AvalonGame === 'undefined') {
+        console.error('AvalonGame 類別?��??��?');
+        return;
+    }
+    
+    if (typeof UIController === 'undefined') {
+        console.error('UIController 類別?��??��?');
+        return;
+    }
+    
+    // 強制清除快�?
+    if ('caches' in window) {
+        caches.keys().then(names => {
+            names.forEach(name => {
+                caches.delete(name);
+            });
+        });
+    }
+    
+    try {
+        // ?��??��???        const transport = new TransportLayer();
+        const game = new AvalonGame(transport);
+        window.ui = new UIController(game, transport);
+        
+        // 設置訊息?��???        transport.onMessage('player_list_update', (msg) => {
+            window.ui.updatePlayerList(msg.players);
+        });
+        
+        transport.onMessage('role_assignment', (msg) => {
+            window.ui.showRoleCard(msg.role, msg.isGood, msg.gameInfo);
+        });
+        
+        transport.onMessage('game_state', (msg) => {
+            window.ui.updateGameState(msg.state, msg);
+        });
+        
+        transport.onMessage('mission_result', (msg) => {
+            window.ui.addChatMessage(`�?{msg.missionNumber}輪任?? ${msg.success ? '?��?' : '失�?'}`);
+        });
+        
+        transport.onMessage('game_result', (msg) => {
+            window.ui.addChatMessage(`?�戲結�?�?{msg.winner === 'good' ? '好人' : '壞人'}?��?！`);
+        });
+        
+        transport.onMessage('assassination_phase', (msg) => {
+            window.ui.addChatMessage('壞人?��?！刺客可以刺殺�???..');
+        });
+        
+        transport.onMessage('assassination_result', (msg) => {
+            const result = msg.assassinWins ? '?�客?��??�殺梅�?！�?人�?終獲?��?' : '?�客?�殺失�?！好人�?終獲?��?';
+            window.ui.addChatMessage(result);
+        });
+        
+        transport.onMessage('room_message', (msg) => {
+            const senderName = msg.playerName || `?�家${msg.playerId.substr(-4)}`;
+            window.ui.addRoomMessage(`${senderName}: ${msg.message}`);
+        });
+        
+        console.log('?�瓦?��??��?始�?完�?');
+    } catch (error) {
+        console.error('?�戲?��??�失??', error);
+    }
+}
+
+// ?�面?��??��??��?�?window.addEventListener('beforeunload', () => {
+    console.log('清�??�戲資�?...');
+    // ?�止?�?��??�器
+    if (window.ui && window.ui.codeReader) {
+        window.ui.stopScanning();
+    }
+}); 

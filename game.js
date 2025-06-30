@@ -1,5 +1,5 @@
 // ==================== 遊戲邏輯層 (Game Logic) ====================
-// 版本: 1.0.26
+// 版本: 1.0.36
 // 最後更新: 2024-12-19
 
 class AvalonGame {
@@ -14,6 +14,17 @@ class AvalonGame {
         this.selectedMembers = [];
         this.votes = [];
         this.gameCallbacks = new Map();
+        
+        // 如果是房主，將自己添加到玩家列表
+        if (this.transport.isHostPlayer()) {
+            const hostPlayer = {
+                id: this.transport.getCurrentPlayerId(),
+                name: '房主',
+                ready: true
+            };
+            this.players.push(hostPlayer);
+            console.log('房主已添加到玩家列表:', hostPlayer);
+        }
         
         this.setupMessageHandlers();
     }
@@ -185,37 +196,36 @@ class AvalonGame {
     }
 
     // 處理玩家加入
-    handlePlayerJoin(msg) {
+    handlePlayerJoined(data) {
+        console.log('遊戲邏輯層處理玩家加入:', data);
+        
+        // 檢查玩家是否已存在，防止重複添加
+        if (this.players.find(p => p.id === data.playerId)) {
+            console.log('玩家已存在，跳過添加');
+            return;
+        }
+        
         const newPlayer = {
-            id: msg.playerId,
-            name: msg.playerName || `玩家${this.players.length + 1}`,
+            id: data.playerId,
+            name: data.playerName || `玩家${data.playerId.substr(-4)}`,
             ready: false
         };
         
         this.players.push(newPlayer);
+        console.log('添加新玩家:', newPlayer);
+        console.log('當前玩家列表:', this.players);
         
         // 廣播玩家列表更新
         this.transport.broadcast({
             type: 'player_list_update',
             players: this.players
         });
-
-        this.triggerGameEvent('playerJoined', { player: newPlayer, players: this.players });
-
-        // 檢查是否可以開始遊戲
-        let totalPlayers = this.players.length;
-        if (this.transport.isHostPlayer()) {
-            totalPlayers += 1; // 加上房主
-        }
         
-        // 檢查人數是否在支援的範圍內（5-10人）
-        const supportedPlayerCounts = [5, 6, 7, 8, 9, 10];
-        if (supportedPlayerCounts.includes(totalPlayers) && this.transport.isHostPlayer()) {
-            this.transport.broadcast({
-                type: 'game_ready',
-                canStart: true
-            });
-        }
+        // 觸發玩家加入事件
+        this.triggerGameEvent('playerJoined', {
+            player: newPlayer,
+            totalPlayers: this.players.length
+        });
     }
 
     // 處理玩家準備

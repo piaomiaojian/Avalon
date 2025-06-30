@@ -1,5 +1,5 @@
 // ==================== UI控制層 (UI Controller) ====================
-// 版本: 1.0.36
+// 版本: 1.0.30
 // 最後更新: 2024-12-19
 // 修復內容: WebRTC連接問題，同步webrtc-chat-test.html的修復
 // - 修復ICE候選信號處理
@@ -10,15 +10,13 @@ class UIController {
     constructor(game, transport) {
         this.game = game;
         this.transport = transport;
-        this.isHost = false;
-        this.hostPeer = null;
-        this.isScanning = false;
-        this.codeReader = null;
         this.qrcode = null;
-        this.pendingCandidates = [];
-        this.offerProcessed = false;
-        this.answerProcessed = false;
-        this.connectionLog = [];
+        this.codeReader = null;
+        this.myRole = null;
+        this.isScanning = false;
+        this.hostOfferSignal = null;
+        this.hostPeer = null;
+        this.pendingCandidates = null;
         
         // 檢查ZXing庫是否載入
         if (typeof ZXing === 'undefined') {
@@ -78,7 +76,7 @@ class UIController {
                 // 根據身份決定返回路徑
                 if (this.transport.isHostPlayer()) {
                     // 房主：返回QR碼區域
-                this.showElement('qrContainer');
+                    this.showElement('qrContainer');
                 } else {
                     // 加入者：返回主選單
                     this.showElement('mainMenu');
@@ -139,22 +137,6 @@ class UIController {
                 this.startScanning();
             });
         }
-
-        // 清空錯誤按鈕
-        const clearErrorsBtn = document.getElementById('clearErrorsBtn');
-        if (clearErrorsBtn) {
-            clearErrorsBtn.addEventListener('click', () => {
-                this.clearErrors();
-            });
-        }
-
-        // 清空連接日誌按鈕
-        const clearLogBtn = document.getElementById('clearLogBtn');
-        if (clearLogBtn) {
-            clearLogBtn.addEventListener('click', () => {
-                this.clearConnectionLog();
-            });
-        }
     }
 
     setupQRCode() {
@@ -174,20 +156,6 @@ class UIController {
     }
 
     setupGameEventHandlers() {
-        // 設置player_joined訊息處理器
-        this.transport.onMessage('player_joined', (data) => {
-            console.log('收到玩家加入訊息:', data);
-            this.addChatMessage(`${data.playerName} 加入了房間`);
-            this.addRoomMessage(`${data.playerName} 加入了房間`);
-            
-            // 更新房間狀態
-            this.updateRoomStatus();
-            this.updateRoomPlayerList();
-            
-            // 通知遊戲邏輯層
-            this.game.handlePlayerJoined(data);
-        });
-        
         // 遊戲事件處理
         this.game.onGameEvent('playerJoined', (data) => {
             this.addChatMessage(`${data.player.name} 加入了遊戲`);
@@ -244,8 +212,8 @@ class UIController {
             if (typeof SimplePeer === 'undefined') {
                 throw new Error('SimplePeer 庫未載入，請檢查網路連接');
             }
-        
-        // 房主創建一個peer並保存，用於後續處理answer
+            
+            // 房主創建一個peer並保存，用於後續處理answer
             console.log('房主創建WebRTC peer...');
             this.hostPeer = new SimplePeer({ 
                 initiator: true, 
@@ -261,22 +229,20 @@ class UIController {
             });
             
             console.log('房主peer創建完成，初始信令狀態:', this.hostPeer.signalingState);
-        this.setupPeer(this.hostPeer);
+            this.setupPeer(this.hostPeer);
             
-            // 房主設置訊息處理器已在setupPeer中處理，這裡不需要重複設置
-        
-        this.hostPeer.on('signal', (data) => {
-            // 房主發送offer信號
-            if (data.type === 'offer') {
-                console.log('房主生成offer信號');
-                console.log('當前信令狀態:', this.hostPeer.signalingState);
-                console.log('當前連接狀態:', this.hostPeer.connectionState);
-                
-                const compressed = LZString.compressToBase64(JSON.stringify(data));
+            this.hostPeer.on('signal', (data) => {
+                // 房主發送offer信號
+                if (data.type === 'offer') {
+                    console.log('房主生成offer信號');
+                    console.log('當前信令狀態:', this.hostPeer.signalingState);
+                    console.log('當前連接狀態:', this.hostPeer.connectionState);
+                    
+                    const compressed = LZString.compressToBase64(JSON.stringify(data));
                     
                     // 檢查QRCode是否可用
                     if (this.qrcode) {
-                this.qrcode.makeCode(compressed);
+                        this.qrcode.makeCode(compressed);
                     }
                     
                     // 檢查QR碼文字元素是否存在
@@ -289,22 +255,22 @@ class UIController {
                     if (qrTitleElement) {
                         qrTitleElement.textContent = '請讓其他玩家掃描此QR碼加入';
                     }
-                
-                // 保存offer信號，供後續使用
-                this.hostOfferSignal = data;
-            }
-        });
+                    
+                    // 保存offer信號，供後續使用
+                    this.hostOfferSignal = data;
+                }
+            });
 
-        this.hostPeer.on('connect', () => {
-            console.log('玩家連接成功');
+            this.hostPeer.on('connect', () => {
+                console.log('玩家連接成功');
                 console.log('最終信令狀態:', this.hostPeer.signalingState || 'undefined');
                 console.log('最終連接狀態:', this.hostPeer.connectionState || 'undefined');
-            this.addChatMessage('玩家已連接');
+                this.addChatMessage('玩家已連接');
                 this.addRoomMessage('玩家已連接');
                 // 連接建立後，停止掃描並返回房間區域
-            this.stopScanning();
-            this.hideElement('qrContainer');
-            this.hideElement('scanContainer');
+                this.stopScanning();
+                this.hideElement('qrContainer');
+                this.hideElement('scanContainer');
                 this.showRoomArea();
             });
 
@@ -436,143 +402,92 @@ class UIController {
 
     // 處理信號數組
     processSignalArray(signals) {
-        if (!Array.isArray(signals)) {
-            this.logConnection('processSignalArray: 輸入不是數組', 'error');
-            return;
+        if (typeof SimplePeer === 'undefined') {
+            this.logError('SimplePeer庫載入', `SimplePeer庫載入失敗`);
+            throw new Error('SimplePeer 庫未載入');
         }
-
-        this.logConnection(`處理信號數組，共 ${signals.length} 個信號`, 'info');
 
         // 過濾和驗證信號
         const validSignals = signals.filter((signal, index) => {
             if (!signal || typeof signal !== 'object') {
-                this.logConnection(`跳過無效信號 ${index + 1}: 不是對象`, 'warning');
+                console.log(`跳過無效信號 ${index + 1}: 不是對象`);
                 return false;
             }
             
             if (!signal.type) {
-                this.logConnection(`跳過無效信號 ${index + 1}: 缺少type屬性`, 'warning');
+                console.log(`跳過無效信號 ${index + 1}: 缺少type屬性`);
                 return false;
             }
             
             // 驗證信號類型
             const validTypes = ['offer', 'answer', 'candidate'];
             if (!validTypes.includes(signal.type)) {
-                this.logConnection(`跳過無效信號 ${index + 1}: 未知類型 ${signal.type}`, 'warning');
+                console.log(`跳過無效信號 ${index + 1}: 未知類型 ${signal.type}`);
                 return false;
             }
             
             return true;
         });
 
-        this.logConnection(`過濾後有效信號數量: ${validSignals.length}/${signals.length}`, 'info');
+        console.log(`過濾後有效信號數量: ${validSignals.length}/${signals.length}`);
 
+        // 創建peer
+        const peer = new SimplePeer({ 
+            initiator: false, 
+            config: {
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    { urls: 'stun:stun2.l.google.com:19302' },
+                    { urls: 'stun:stun3.l.google.com:19302' },
+                    { urls: 'stun:stun4.l.google.com:19302' }
+                ]
+            }
+        });
+        this.setupPeer(peer);
+        console.log('手動加入者創建peer完成');
+
+        // 處理有效信號
         validSignals.forEach((signal, index) => {
-            this.logConnection(`處理信號 ${index + 1}/${validSignals.length}: ${signal.type}`, 'info');
+            console.log(`處理信號 ${index + 1}/${validSignals.length}: ${signal.type}`);
             try {
-                if (signal.type === 'offer') {
-                    // 加入者收到房主的offer
-                    if (typeof SimplePeer === 'undefined') {
-                        throw new Error('SimplePeer 庫未載入');
-                    }
-                    const peer = new SimplePeer({ 
-                        initiator: false, 
-                        config: {
-                            iceServers: [
-                                { urls: 'stun:stun.l.google.com:19302' },
-                                { urls: 'stun:stun1.l.google.com:19302' },
-                                { urls: 'stun:stun2.l.google.com:19302' },
-                                { urls: 'stun:stun3.l.google.com:19302' },
-                                { urls: 'stun:stun4.l.google.com:19302' }
-                            ]
-                        }
-                    });
-                    this.setupPeer(peer);
-                    peer.signal(signal);
-                    this.logConnection(`信號 ${signal.type} 處理成功`, 'success');
-                } else if (signal.type === 'answer') {
-                    // 房主收到加入者的answer
-                    if (!this.hostPeer || this.hostPeer.destroyed) {
-                        throw new Error('房主peer已失效');
-                    }
-                    this.hostPeer.signal(signal);
-                    this.logConnection(`信號 ${signal.type} 處理成功`, 'success');
-                } else if (signal.type === 'candidate') {
-                    // ICE候選信號
-                    if (this.hostPeer && !this.hostPeer.destroyed) {
-                        this.hostPeer.signal(signal);
-                        this.logConnection(`ICE候選信號處理成功`, 'success');
-                    } else {
-                        // 將ICE候選信號保存到待處理列表
-                        this.pendingCandidates.push(signal);
-                        this.logConnection(`ICE候選信號保存到待處理列表`, 'info');
-                    }
-                }
+                peer.signal(signal);
+                console.log(`信號 ${signal.type} 處理成功`);
             } catch (error) {
-                this.logConnection(`信號 ${signal.type} 處理失敗: ${error.message}`, 'error');
-                this.logError('信號處理錯誤', `處理信號 ${signal.type} 失敗: ${error.message}`);
+                console.log(`信號 ${signal.type} 處理失敗: ${error.message}`);
             }
         });
     }
 
     // 處理單個信號
     processSingleSignal(signal) {
-        if (!signal || typeof signal !== 'object') {
-            this.logConnection('processSingleSignal: 輸入不是有效對象', 'error');
-            return;
+        if (typeof SimplePeer === 'undefined') {
+            this.logError('SimplePeer庫載入', `SimplePeer庫載入失敗`);
+            throw new Error('SimplePeer 庫未載入');
         }
 
-        if (!signal.type) {
-            this.logConnection('processSingleSignal: 信號缺少type屬性', 'error');
-            return;
-        }
-
-        this.logConnection(`處理單個信號: ${signal.type}`, 'info');
-
-        try {
-            if (signal.type === 'offer') {
-                // 加入者收到房主的offer
-                if (typeof SimplePeer === 'undefined') {
-                    throw new Error('SimplePeer 庫未載入');
-                }
-                const peer = new SimplePeer({ 
-                    initiator: false, 
-                    config: {
-                        iceServers: [
-                            { urls: 'stun:stun.l.google.com:19302' },
-                            { urls: 'stun:stun1.l.google.com:19302' },
-                            { urls: 'stun:stun2.l.google.com:19302' },
-                            { urls: 'stun:stun3.l.google.com:19302' },
-                            { urls: 'stun:stun4.l.google.com:19302' }
-                        ]
-                    }
-                });
-                this.setupPeer(peer);
-                peer.signal(signal);
-                this.logConnection(`單個信號 ${signal.type} 處理成功`, 'success');
-            } else if (signal.type === 'answer') {
-                // 房主收到加入者的answer
-                if (!this.hostPeer || this.hostPeer.destroyed) {
-                    throw new Error('房主peer已失效');
-                }
-                this.hostPeer.signal(signal);
-                this.logConnection(`單個信號 ${signal.type} 處理成功`, 'success');
-            } else if (signal.type === 'candidate') {
-                // ICE候選信號
-                if (this.hostPeer && !this.hostPeer.destroyed) {
-                    this.hostPeer.signal(signal);
-                    this.logConnection(`單個ICE候選信號處理成功`, 'success');
-                } else {
-                    // 將ICE候選信號保存到待處理列表
-                    this.pendingCandidates.push(signal);
-                    this.logConnection(`單個ICE候選信號保存到待處理列表`, 'info');
-                }
-            } else {
-                throw new Error(`未知的信號類型: ${signal.type}`);
+        console.log(`處理單個信號: ${signal.type}`);
+        
+        const peer = new SimplePeer({ 
+            initiator: false, 
+            config: {
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    { urls: 'stun:stun2.l.google.com:19302' },
+                    { urls: 'stun:stun3.l.google.com:19302' },
+                    { urls: 'stun:stun4.l.google.com:19302' }
+                ]
             }
+        });
+        this.setupPeer(peer);
+        console.log('手動加入者創建peer完成');
+        
+        try {
+            peer.signal(signal);
+            console.log(`信號 ${signal.type} 處理成功`);
         } catch (error) {
-            this.logConnection(`單個信號 ${signal.type} 處理失敗: ${error.message}`, 'error');
-            this.logError('信號處理錯誤', `處理單個信號 ${signal.type} 失敗: ${error.message}`);
+            console.log(`信號 ${signal.type} 處理失敗: ${error.message}`);
         }
     }
 
@@ -681,7 +596,7 @@ class UIController {
                             if (data.type === 'offer') {
                                 // 加入者收到房主的offer
                                 console.log('加入者收到房主offer');
-                                this.logConnection('加入者收到房主offer', 'info');
+                                console.log('加入者收到offer時的信令狀態: 尚未創建peer');
                                 
                                 this.logError('SimplePeer庫載入', `SimplePeer庫載入成功`);
                                 if (typeof SimplePeer === 'undefined') {
@@ -712,21 +627,19 @@ class UIController {
                                     peer.signal(data);
                                     console.log('成功發送offer信號給加入者peer');
                                     console.log('處理offer後的信令狀態:', peer.signalingState);
-                                    this.logConnection(`成功發送offer信號，信令狀態: ${peer.signalingState}`, 'success');
                                 } catch (error) {
                                     console.error('發送offer信號失敗:', error);
-                                    this.logConnection(`發送offer信號失敗: ${error.message}`, 'error');
                                     this.logError('Peer錯誤', `處理offer信號失敗: ${error.message}`);
                                 }
                             } else if (data.type === 'answer') {
                                 // 房主收到加入者的answer
                                 console.log('房主收到加入者answer');
-                                this.logConnection('房主收到加入者answer', 'info');
+                                console.log('收到answer時的信令狀態:', this.hostPeer.signalingState);
+                                console.log('收到answer時的連接狀態:', this.hostPeer.connectionState);
                                 
                                 // 檢查是否有可用的hostPeer
                                 if (!this.hostPeer || this.hostPeer.destroyed) {
                                     console.error('hostPeer不存在或已銷毀');
-                                    this.logConnection('hostPeer不存在或已銷毀', 'error');
                                     this.logError('Peer錯誤', '房主peer已失效，請重新創建房間');
                                     return;
                                 }
@@ -734,7 +647,6 @@ class UIController {
                                 // 檢查是否已經連接
                                 if (this.hostPeer.connected) {
                                     console.log('已經連接，忽略重複的answer信號');
-                                    this.logConnection('已經連接，忽略重複的answer信號', 'info');
                                     return;
                                 }
                                 
@@ -745,7 +657,6 @@ class UIController {
                                 // 只有在信令狀態明顯錯誤時才拒絕
                                 if (this.hostPeer.signalingState === 'closed') {
                                     console.error('信令狀態已關閉，無法處理answer');
-                                    this.logConnection('信令狀態已關閉，無法處理answer', 'error');
                                     this.logError('Peer錯誤', '信令連接已關閉，請重新創建房間');
                                     return;
                                 }
@@ -753,13 +664,10 @@ class UIController {
                                 // 使用保存的hostPeer來處理answer
                                 try {
                                     console.log('使用hostPeer處理answer信號');
-                                    this.logConnection('使用hostPeer處理answer信號', 'info');
                                     this.hostPeer.signal(data);
                                     console.log('answer信號處理完成，新信令狀態:', this.hostPeer.signalingState);
-                                    this.logConnection(`answer信號處理完成，信令狀態: ${this.hostPeer.signalingState}`, 'success');
                                 } catch (error) {
                                     console.error('發送answer信號失敗:', error);
-                                    this.logConnection(`發送answer信號失敗: ${error.message}`, 'error');
                                     this.logError('Peer錯誤', `處理answer信號失敗: ${error.message}`);
                                 }
                             } else {
@@ -936,8 +844,6 @@ class UIController {
         // 將peer添加到transport層
         this.transport.addPeer(peer);
 
-        // 設置訊息處理器已在transport層的addPeer方法中處理，這裡不需要重複設置
-
         peer.on('signal', (data) => {
             console.log('發送信號:', data.type || 'unknown');
             console.log('發送信號時的信令狀態:', peer.signalingState || 'undefined');
@@ -969,7 +875,7 @@ class UIController {
                 
                 // 檢查QRCode是否可用
                 if (this.qrcode) {
-                this.qrcode.makeCode(compressed);
+                    this.qrcode.makeCode(compressed);
                 }
                 
                 // 檢查QR碼文字元素是否存在
@@ -1031,14 +937,12 @@ class UIController {
                 this.showRoomArea();
                 console.log('加入者進入房間區域');
                 
-                // 加入者通知房主已加入，直接使用peer發送
-                const joinMessage = {
+                // 加入者通知房主已加入
+                this.transport.send({
                     type: 'player_joined',
                     playerId: this.transport.getCurrentPlayerId(),
                     playerName: '玩家' + this.transport.getCurrentPlayerId().substr(-4)
-                };
-                peer.send(JSON.stringify(joinMessage));
-                console.log('加入者發送player_joined訊息:', joinMessage);
+                });
             }
         });
 
@@ -1231,11 +1135,11 @@ class UIController {
         const roleDescription = document.getElementById('roleDescription');
         
         if (roleName) {
-        roleName.textContent = this.getRoleName(role);
+            roleName.textContent = this.getRoleName(role);
         }
         
         if (roleDescription) {
-        roleDescription.textContent = this.getRoleDescription(role, isGood, gameInfo);
+            roleDescription.textContent = this.getRoleDescription(role, isGood, gameInfo);
         }
         
         this.showElement('roleCard');
@@ -1403,57 +1307,43 @@ class UIController {
         const clearErrorsBtn = document.getElementById('clearErrors');
         if (clearErrorsBtn) {
             clearErrorsBtn.addEventListener('click', () => {
-            this.clearErrors();
-        });
+                this.clearErrors();
+            });
         }
     }
 
     logError(type, message, stack = null) {
-        const timestamp = new Date().toLocaleTimeString();
-        const errorLog = document.getElementById('errorLog');
+        const errorContainer = document.getElementById('errorContainer');
+        const errorMessages = document.getElementById('errorMessages');
         
-        if (errorLog) {
-            const errorEntry = document.createElement('div');
-            errorEntry.className = 'error-entry';
-            errorEntry.innerHTML = `
-                <span class="error-time">[${timestamp}]</span>
-                <span class="error-type">${type}:</span>
-                <span class="error-message">${message}</span>
-                ${stack ? `<details><summary>詳細資訊</summary><pre>${stack}</pre></details>` : ''}
-            `;
-            errorLog.appendChild(errorEntry);
-            errorLog.scrollTop = errorLog.scrollHeight;
+        // 如果錯誤容器不存在，只記錄到控制台
+        if (!errorContainer || !errorMessages) {
+            console.error(`[${type}] ${message}`, stack);
+            return;
         }
         
-        console.error(`[${timestamp}] ${type}: ${message}`, stack);
-    }
-
-    // 添加連接日誌
-    logConnection(message, type = 'info') {
-        const timestamp = new Date().toLocaleTimeString();
-        this.connectionLog.push({ timestamp, message, type });
+        // 顯示錯誤容器
+        errorContainer.classList.remove('hidden');
         
-        const connectionLogElement = document.getElementById('connectionLog');
-        if (connectionLogElement) {
-            const logEntry = document.createElement('div');
-            logEntry.className = `log-entry log-${type}`;
-            logEntry.innerHTML = `
-                <span class="log-time">[${timestamp}]</span>
-                <span class="log-message">${message}</span>
-            `;
-            connectionLogElement.appendChild(logEntry);
-            connectionLogElement.scrollTop = connectionLogElement.scrollHeight;
+        // 創建錯誤訊息元素
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'error-message';
+        
+        const time = new Date().toLocaleTimeString();
+        let errorHtml = `<div class="error-time">[${time}] ${type}</div>`;
+        errorHtml += `<div class="error-content">${message}</div>`;
+        
+        if (stack) {
+            errorHtml += `<div class="error-stack">${stack}</div>`;
         }
         
-        console.log(`[${timestamp}] ${message}`);
-    }
-
-    // 清空連接日誌
-    clearConnectionLog() {
-        this.connectionLog = [];
-        const connectionLogElement = document.getElementById('connectionLog');
-        if (connectionLogElement) {
-            connectionLogElement.innerHTML = '';
+        errorDiv.innerHTML = errorHtml;
+        errorMessages.appendChild(errorDiv);
+        
+        // 限制錯誤訊息數量，避免記憶體洩漏
+        const errorElements = errorMessages.children;
+        if (errorElements.length > 10) {
+            errorMessages.removeChild(errorElements[0]);
         }
     }
 
@@ -1462,7 +1352,7 @@ class UIController {
         const errorContainer = document.getElementById('errorContainer');
         
         if (errorMessages) {
-        errorMessages.innerHTML = '';
+            errorMessages.innerHTML = '';
         }
         
         if (errorContainer) {
@@ -1526,8 +1416,12 @@ class UIController {
     // 更新房間狀態
     updateRoomStatus() {
         const roomStatus = document.getElementById('roomStatus');
-        const gameState = this.game.getGameState();
-        const playerCount = gameState.players ? gameState.players.length : 0;
+        let playerCount = this.transport.getConnectedPlayerCount();
+        
+        // 如果是房主，加上房主自己
+        if (this.transport.isHostPlayer()) {
+            playerCount += 1;
+        }
         
         const supportedPlayerCounts = [5, 6, 7, 8, 9, 10];
         const isSupported = supportedPlayerCounts.includes(playerCount);
@@ -1742,16 +1636,17 @@ class UIController {
 
     // 添加房間訊息
     addRoomMessage(message) {
-        const chatMessages = document.getElementById('chatMessages');
-        if (chatMessages) {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = 'chat-message';
-            messageDiv.textContent = `[系統] ${message}`;
-            chatMessages.appendChild(messageDiv);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        } else {
-            console.warn('chatMessages 元素不存在，跳過添加房間訊息');
+        const chatMessages = document.getElementById('roomChatMessages');
+        if (!chatMessages) {
+            console.warn('roomChatMessages 元素不存在，跳過添加房間訊息');
+            return;
         }
+        
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'chat-message';
+        messageDiv.textContent = message;
+        chatMessages.appendChild(messageDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 
     // 更新房間玩家列表

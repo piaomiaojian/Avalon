@@ -3,7 +3,90 @@
 
 版本歷史
 ========
-v1.0.26 (當前版本)
+v1.0.36 (當前版本)
+- 修復重複處理player_joined訊息的問題
+- 移除setupPeer方法中重複的訊息處理器設置
+- 將player_joined訊息處理器設置移到setupGameEventHandlers方法中
+- 修復加入者發送player_joined訊息的邏輯，直接使用peer發送
+- 解決加入者沒有顯示畫面的問題
+- 確保每個玩家加入只處理一次，避免重複觸發
+
+v1.0.35
+- 修復handlePlayerJoined方法中不存在的updateGameState調用錯誤
+- 修復createRoom方法中重複設置player_joined訊息處理器問題
+- 改進重複檢查機制，防止玩家重複加入
+- 解決訊息處理重複觸發問題，確保每個玩家加入只處理一次
+- 確認WebRTC連接和房間管理功能正常工作
+
+v1.0.34
+- 修復加入者房間狀態顯示問題
+- 修復房主缺少player_joined訊息處理器問題
+- 修復遊戲邏輯層初始化問題，確保房主被添加到玩家列表
+- 修復handlePlayerJoined方法中的方法名錯誤（emitGameEvent → triggerGameEvent）
+- 改進getGameState方法，確保正確返回包含房主的玩家列表
+- 確認房主和加入者都能正確顯示房間狀態和成員列表
+
+v1.0.33
+- 修復房間成員顯示問題
+- 修復transport.js中Uint8Array數據處理問題
+- 添加player_joined訊息處理器
+- 實現handlePlayerJoined方法處理玩家加入邏輯
+- 修復updateRoomStatus方法，使用遊戲邏輯層的玩家列表
+- 改進房間狀態顯示和玩家列表更新
+- 確認WebRTC連接和房間管理功能正常工作
+
+v1.0.32
+- 修復WebRTC連接成功後的訊息處理問題
+- 改進transport.js中的handleMessage方法，支援字符串和對象數據
+- 修復addRoomMessage方法中的元素ID錯誤（roomChatMessages → chatMessages）
+- 添加更詳細的錯誤日誌和數據類型檢查
+- 優化訊息處理器的錯誤處理邏輯
+- 確認WebRTC連接功能正常工作
+
+v1.0.31
+- 新增📋 連接日誌功能
+- 添加連接日誌UI區域，顯示WebRTC連接過程
+- 實現logConnection方法，支援info、success、warning、error四種日誌類型
+- 添加清空日誌按鈕和相關事件處理
+- 更新信號處理邏輯，添加詳細的連接日誌記錄
+- 改進processSignalArray和processSingleSignal方法，添加日誌記錄
+- 修復信號處理中的語法錯誤
+- 優化錯誤處理和用戶體驗
+
+v1.0.30
+- 同步webrtc-chat-test.html的修復到主要遊戲文件
+- 更新app.js、game.js、transport.js版本號到1.0.30
+- 更新index.html版本號和腳本引用
+- 修復ICE候選信號處理和信號驗證機制
+- 添加信號數組支援和過濾機制
+- 改進錯誤處理和連接狀態監控
+- 修復"signal() called with invalid signal data"錯誤
+
+v1.0.29
+- 修復ICE候選信號處理中的null檢查錯誤
+- 添加更多調試信息和連接狀態監控
+- 添加ICE連接狀態變化監控
+- 改進信號處理錯誤捕獲
+- 優化pendingCandidates清空機制
+- 添加詳細的連接診斷日誌
+
+v1.0.28
+- 修復WebRTC聊天測試頁面ICE候選信號交換問題
+- 實現完整的WebRTC信令交換，包括offer、answer和ICE候選
+- 支援處理包含多個信號的數組
+- 添加pendingCandidates機制處理ICE候選信號
+- 改進信號處理邏輯，支援單個信號和信號數組
+- 修復房主發送answer後無反應的問題
+
+v1.0.27
+- 修復WebRTC聊天測試頁面重複信號問題
+- 添加answerProcessed和offerProcessed狀態檢查
+- 防止重複發送offer和answer信號
+- 添加按鈕禁用機制防止重複點擊
+- 改進錯誤處理，提供更具體的錯誤訊息
+- 添加連接狀態檢查和重置建議
+
+v1.0.26
 - 修復WebRTC連接失敗問題
 - 移除trickle: false配置，改進ICE候選處理
 - 增加更多STUN服務器以提高連接成功率

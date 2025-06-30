@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebRTC 聊天測試</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft JhengHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+
+        .content {
+            padding: 20px;
+        }
+
+        .connection-section {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .connection-section h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+
+        .role-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #0056b3;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #1e7e34;
+        }
+
+        .btn-warning {
+            background: #ffc107;
+            color: #212529;
+        }
+
+        .btn-warning:hover {
+            background: #e0a800;
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .signal-area {
+            background: white;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        .signal-area h4 {
+            color: #495057;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .signal-input {
+            width: 100%;
+            min-height: 80px;
+            padding: 10px;
+            border: 1px solid #ced4da;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 12px;
+            resize: vertical;
+        }
+
+        .signal-input:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
+        }
+
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+
+        .status.connecting {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .chat-section {
+            background: white;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .chat-header {
+            background: #e9ecef;
+            padding: 15px;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .chat-header h3 {
+            color: #495057;
+            font-size: 18px;
+        }
+
+        .chat-messages {
+            height: 300px;
+            overflow-y: auto;
+            padding: 15px;
+            background: #f8f9fa;
+        }
+
+        .message {
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 8px;
+            max-width: 80%;
+            word-wrap: break-word;
+        }
+
+        .message.sent {
+            background: #007bff;
+            color: white;
+            margin-left: auto;
+        }
+
+        .message.received {
+            background: #e9ecef;
+            color: #495057;
+        }
+
+        .message-time {
+            font-size: 11px;
+            opacity: 0.7;
+            margin-top: 5px;
+        }
+
+        .chat-input-area {
+            padding: 15px;
+            border-top: 1px solid #dee2e6;
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ced4da;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .chat-input:focus {
+            outline: none;
+            border-color: #007bff;
+        }
+
+        .send-btn {
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .send-btn:hover {
+            background: #0056b3;
+        }
+
+        .send-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .log-area {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 10px;
+            margin-top: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+            color: #495057;
+        }
+
+        .copy-btn {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+
+        .copy-btn:hover {
+            background: #545b62;
+        }
+
+        .next-step-btn {
+            background: #17a2b8;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+
+        .next-step-btn:hover {
+            background: #138496;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔗 WebRTC 聊天測試</h1>
+            <p>版本 1.0.26 - 測試WebRTC P2P連接和聊天功能</p>
+        </div>
+
+        <div class="content">
+            <!-- 連接設置區域 -->
+            <div class="connection-section">
+                <h3>📡 連接設置</h3>
+                
+                <div class="role-buttons">
+                    <button id="btnHost" class="btn btn-primary">🏠 創建連接 (房主)</button>
+                    <button id="btnJoin" class="btn btn-success">🔗 加入連接 (加入者)</button>
+                    <button id="btnReset" class="btn btn-warning">🔄 重置</button>
+                </div>
+
+                <div id="statusArea" class="status hidden">
+                    <span id="statusText">準備中...</span>
+                </div>
+
+                <!-- 房主信號區域 -->
+                <div id="hostSignalArea" class="signal-area hidden">
+                    <h4>📤 發送信號 (房主)</h4>
+                    <p style="color: #666; margin-bottom: 10px;">請將以下信號複製並發送給加入者：</p>
+                    <textarea id="hostSignal" class="signal-input" readonly placeholder="等待生成信號..."></textarea>
+                    <button id="copyHostSignal" class="copy-btn">📋 複製信號</button>
+                    <button id="btnShowReceiveArea" class="next-step-btn">📥 下一步：接收加入者回應</button>
+                </div>
+
+                <!-- 加入者信號區域 -->
+                <div id="joinSignalArea" class="signal-area hidden">
+                    <h4>📥 接收信號 (加入者)</h4>
+                    <p style="color: #666; margin-bottom: 10px;">請貼上房主發送的信號：</p>
+                    <textarea id="joinSignal" class="signal-input" placeholder="請貼上房主的信號..."></textarea>
+                    <button id="btnConnect" class="btn btn-success">🔗 建立連接</button>
+                </div>
+
+                <!-- 加入者回應信號區域 -->
+                <div id="responseSignalArea" class="signal-area hidden">
+                    <h4>📤 回應信號 (加入者)</h4>
+                    <p style="color: #666; margin-bottom: 10px;">請將以下回應信號發送給房主：</p>
+                    <textarea id="responseSignal" class="signal-input" readonly placeholder="等待生成回應信號..."></textarea>
+                    <button id="copyResponseSignal" class="copy-btn">📋 複製回應</button>
+                </div>
+
+                <!-- 房主接收回應區域 -->
+                <div id="receiveResponseArea" class="signal-area hidden">
+                    <h4>📥 接收回應 (房主)</h4>
+                    <p style="color: #666; margin-bottom: 10px;">請貼上加入者的回應信號：</p>
+                    <textarea id="receiveResponse" class="signal-input" placeholder="請貼上加入者的回應信號..."></textarea>
+                    <button id="btnCompleteConnection" class="btn btn-success">✅ 完成連接</button>
+                </div>
+            </div>
+
+            <!-- 聊天區域 -->
+            <div id="chatSection" class="chat-section hidden">
+                <div class="chat-header">
+                    <h3>💬 聊天室</h3>
+                </div>
+                <div id="chatMessages" class="chat-messages">
+                    <div class="message received">
+                        <div>歡迎來到WebRTC聊天室！</div>
+                        <div class="message-time">系統訊息</div>
+                    </div>
+                </div>
+                <div class="chat-input-area">
+                    <input type="text" id="chatInput" class="chat-input" placeholder="輸入訊息..." maxlength="200">
+                    <button id="sendBtn" class="send-btn">發送</button>
+                </div>
+            </div>
+
+            <!-- 日誌區域 -->
+            <div class="log-area">
+                <div style="font-weight: bold; margin-bottom: 10px;">📋 連接日誌</div>
+                <div id="logContent"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 外部庫 -->
+    <script src="https://unpkg.com/simple-peer@9.11.1/simplepeer.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lz-string@1.4.4/libs/lz-string.min.js"></script>
+
+    <script>
+        class WebRTCChatTest {
+            constructor() {
+                this.peer = null;
+                this.isHost = false;
+                this.connectionState = 'disconnected';
+                this.answerProcessed = false;
+                this.offerProcessed = false;
+                this.pendingCandidates = [];
+                this.setupEventListeners();
+                this.log('WebRTC聊天測試初始化完成');
+            }
+
+            setupEventListeners() {
+                // 角色選擇按鈕
+                document.getElementById('btnHost').addEventListener('click', () => this.createHost());
+                document.getElementById('btnJoin').addEventListener('click', () => this.createJoiner());
+                document.getElementById('btnReset').addEventListener('click', () => this.reset());
+
+                // 連接按鈕
+                document.getElementById('btnConnect').addEventListener('click', () => this.connectAsJoiner());
+                document.getElementById('btnCompleteConnection').addEventListener('click', () => this.completeConnection());
+                document.getElementById('btnShowReceiveArea').addEventListener('click', () => this.showReceiveResponseArea());
+
+                // 複製按鈕
+                document.getElementById('copyHostSignal').addEventListener('click', () => this.copyToClipboard('hostSignal'));
+                document.getElementById('copyResponseSignal').addEventListener('click', () => this.copyToClipboard('responseSignal'));
+
+                // 聊天輸入
+                document.getElementById('chatInput').addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        this.sendMessage();
+                    }
+                });
+                document.getElementById('sendBtn').addEventListener('click', () => this.sendMessage());
+            }
+
+            log(message) {
+                const logContent = document.getElementById('logContent');
+                const timestamp = new Date().toLocaleTimeString();
+                logContent.innerHTML += `<div>[${timestamp}] ${message}</div>`;
+                logContent.scrollTop = logContent.scrollHeight;
+                console.log(`[${timestamp}] ${message}`);
+            }
+
+            updateStatus(message, type = 'connecting') {
+                const statusArea = document.getElementById('statusArea');
+                const statusText = document.getElementById('statusText');
+                
+                statusArea.className = `status ${type}`;
+                statusText.textContent = message;
+                statusArea.classList.remove('hidden');
+            }
+
+            createHost() {
+                this.isHost = true;
+                this.log('房主模式：創建WebRTC連接');
+                this.updateStatus('正在創建連接...', 'connecting');
+
+                try {
+                    this.peer = new SimplePeer({
+                        initiator: true,
+                        config: {
+                            iceServers: [
+                                { urls: 'stun:stun.l.google.com:19302' },
+                                { urls: 'stun:stun1.l.google.com:19302' },
+                                { urls: 'stun:stun2.l.google.com:19302' },
+                                { urls: 'stun:stun3.l.google.com:19302' },
+                                { urls: 'stun:stun4.l.google.com:19302' }
+                            ]
+                        }
+                    });
+
+                    this.setupPeerEvents();
+                    this.showHostSignalArea();
+                    this.log('房主peer創建成功，等待生成offer信號');
+
+                } catch (error) {
+                    this.log(`房主創建失敗: ${error.message}`);
+                    this.updateStatus(`創建失敗: ${error.message}`, 'error');
+                }
+            }
+
+            createJoiner() {
+                this.isHost = false;
+                this.log('加入者模式：準備接收信號');
+                this.updateStatus('等待房主信號...', 'connecting');
+                this.showJoinSignalArea();
+            }
+
+            setupPeerEvents() {
+                if (!this.peer) return;
+
+                this.peer.on('connect', () => {
+                    this.log('WebRTC連接建立成功！');
+                    this.updateStatus('連接成功！可以開始聊天', 'connected');
+                    this.connectionState = 'connected';
+                    this.showChatSection();
+                });
+
+                this.peer.on('iceStateChange', (state) => {
+                    this.log(`ICE連接狀態變化: ${state}`);
+                });
+
+                this.peer.on('signal', (data) => {
+                    this.log(`生成信號: ${data.type}`);
+                    
+                    if (this.isHost && data.type === 'offer') {
+                        // 房主生成offer信號
+                        const compressed = LZString.compressToBase64(JSON.stringify(data));
+                        document.getElementById('hostSignal').value = compressed;
+                        this.log('房主offer信號已生成，請複製給加入者');
+                        this.updateStatus('offer信號已生成，請發送給加入者', 'connecting');
+                    } else if (!this.isHost && data.type === 'answer') {
+                        // 加入者生成answer信號
+                        const compressed = LZString.compressToBase64(JSON.stringify(data));
+                        document.getElementById('responseSignal').value = compressed;
+                        this.showResponseSignalArea();
+                        this.log('加入者answer信號已生成，請複製給房主');
+                        this.updateStatus('answer信號已生成，請發送給房主', 'connecting');
+                    } else if (data.type === 'candidate') {
+                        // ICE候選信號，需要即時交換
+                        const candidateInfo = data.candidate ? 
+                            (data.candidate.substring ? data.candidate.substring(0, 50) + '...' : String(data.candidate).substring(0, 50) + '...') : 
+                            'null';
+                        this.log(`生成ICE候選信號: ${candidateInfo}`);
+                        
+                        // 將ICE候選信號添加到待發送列表
+                        if (!this.pendingCandidates) {
+                            this.pendingCandidates = [];
+                        }
+                        this.pendingCandidates.push(data);
+                        
+                        // 更新信號顯示
+                        this.updateSignalDisplay();
+                    }
+                });
+
+                this.peer.on('data', (data) => {
+                    try {
+                        const message = JSON.parse(data);
+                        if (message.type === 'chat') {
+                            this.addChatMessage(message.text, 'received');
+                            this.log(`收到訊息: ${message.text}`);
+                        }
+                    } catch (error) {
+                        this.log(`數據解析失敗: ${error.message}`);
+                    }
+                });
+
+                this.peer.on('error', (err) => {
+                    this.log(`連接錯誤: ${err.message}`);
+                    
+                    // 根據錯誤類型提供更具體的錯誤信息
+                    let errorMessage = '連接錯誤';
+                    if (err.message.includes('Failed to set remote answer sdp')) {
+                        errorMessage = '重複發送answer信號，請重新開始連接';
+                    } else if (err.message.includes('Failed to set remote offer sdp')) {
+                        errorMessage = '重複發送offer信號，請重新開始連接';
+                    } else if (err.message.includes('ICE')) {
+                        errorMessage = '網路連接問題，請檢查網路設置';
+                    } else if (err.message.includes('signaling')) {
+                        errorMessage = '信令交換失敗，請重新嘗試連接';
+                    }
+                    
+                    this.updateStatus(`${errorMessage}: ${err.message}`, 'error');
+                    
+                    // 如果是重複信號錯誤，建議重置
+                    if (err.message.includes('Failed to set remote')) {
+                        this.log('建議：點擊重置按鈕重新開始連接');
+                    }
+                });
+
+                this.peer.on('close', () => {
+                    this.log('連接已關閉');
+                    this.updateStatus('連接已關閉', 'error');
+                    this.connectionState = 'disconnected';
+                });
+            }
+
+            connectAsJoiner() {
+                const signalText = document.getElementById('joinSignal').value.trim();
+                if (!signalText) {
+                    this.log('請先貼上房主的信號');
+                    return;
+                }
+
+                // 檢查是否已經處理過offer信號
+                if (this.offerProcessed) {
+                    this.log('已經處理過offer信號，請勿重複發送');
+                    return;
+                }
+
+                // 禁用按鈕防止重複點擊
+                const btnConnect = document.getElementById('btnConnect');
+                btnConnect.disabled = true;
+                btnConnect.textContent = '處理中...';
+
+                try {
+                    this.log('加入者：解析房主信號');
+                    const decompressed = LZString.decompressFromBase64(signalText);
+                    if (!decompressed) {
+                        throw new Error('信號格式錯誤');
+                    }
+
+                    const data = JSON.parse(decompressed);
+                    
+                    // 檢查是否為信號數組
+                    if (Array.isArray(data)) {
+                        this.log(`加入者：收到 ${data.length} 個信號`);
+                        
+                        // 創建peer
+                        this.log('加入者：創建peer');
+                        this.peer = new SimplePeer({
+                            initiator: false,
+                            config: {
+                                iceServers: [
+                                    { urls: 'stun:stun.l.google.com:19302' },
+                                    { urls: 'stun:stun1.l.google.com:19302' },
+                                    { urls: 'stun:stun2.l.google.com:19302' },
+                                    { urls: 'stun:stun3.l.google.com:19302' },
+                                    { urls: 'stun:stun4.l.google.com:19302' }
+                                ]
+                            }
+                        });
+                        this.setupPeerEvents();
+                        
+                        this.processSignalArray(data);
+                    } else {
+                        // 單個信號
+                        if (data.type !== 'offer') {
+                            throw new Error('不是有效的offer信號');
+                        }
+                        
+                        // 創建peer
+                        this.log('加入者：創建peer');
+                        this.peer = new SimplePeer({
+                            initiator: false,
+                            config: {
+                                iceServers: [
+                                    { urls: 'stun:stun.l.google.com:19302' },
+                                    { urls: 'stun:stun1.l.google.com:19302' },
+                                    { urls: 'stun:stun2.l.google.com:19302' },
+                                    { urls: 'stun:stun3.l.google.com:19302' },
+                                    { urls: 'stun:stun4.l.google.com:19302' }
+                                ]
+                            }
+                        });
+                        this.setupPeerEvents();
+                        
+                        this.processSingleSignal(data);
+                    }
+
+                    // 標記已處理offer信號
+                    this.offerProcessed = true;
+
+                } catch (error) {
+                    this.log(`加入者連接失敗: ${error.message}`);
+                    this.updateStatus(`連接失敗: ${error.message}`, 'error');
+                    
+                    // 重新啟用按鈕
+                    btnConnect.disabled = false;
+                    btnConnect.textContent = '🔗 建立連接';
+                }
+            }
+
+            completeConnection() {
+                const responseText = document.getElementById('receiveResponse').value.trim();
+                if (!responseText) {
+                    this.log('請先貼上加入者的回應信號');
+                    return;
+                }
+
+                // 檢查是否已經處理過answer信號
+                if (this.answerProcessed) {
+                    this.log('已經處理過answer信號，請勿重複發送');
+                    return;
+                }
+
+                // 禁用按鈕防止重複點擊
+                const btnCompleteConnection = document.getElementById('btnCompleteConnection');
+                btnCompleteConnection.disabled = true;
+                btnCompleteConnection.textContent = '處理中...';
+
+                try {
+                    this.log('房主：解析加入者回應信號');
+                    const decompressed = LZString.decompressFromBase64(responseText);
+                    if (!decompressed) {
+                        throw new Error('回應信號格式錯誤');
+                    }
+
+                    const data = JSON.parse(decompressed);
+                    
+                    // 檢查是否為信號數組
+                    if (Array.isArray(data)) {
+                        this.log(`房主：收到 ${data.length} 個信號`);
+                        this.processSignalArray(data);
+                    } else {
+                        // 單個信號
+                        if (data.type !== 'answer') {
+                            throw new Error('不是有效的answer信號');
+                        }
+                        this.processSingleSignal(data);
+                    }
+
+                    // 標記已處理answer信號
+                    this.answerProcessed = true;
+
+                } catch (error) {
+                    this.log(`房主連接失敗: ${error.message}`);
+                    this.updateStatus(`連接失敗: ${error.message}`, 'error');
+                    
+                    // 重新啟用按鈕
+                    btnCompleteConnection.disabled = false;
+                    btnCompleteConnection.textContent = '✅ 完成連接';
+                }
+            }
+
+            processSignalArray(signals) {
+                if (!this.peer) {
+                    this.log('Peer未創建，無法處理信號');
+                    return;
+                }
+
+                // 過濾和驗證信號
+                const validSignals = signals.filter((signal, index) => {
+                    if (!signal || typeof signal !== 'object') {
+                        this.log(`跳過無效信號 ${index + 1}: 不是對象`);
+                        return false;
+                    }
+                    
+                    if (!signal.type) {
+                        this.log(`跳過無效信號 ${index + 1}: 缺少type屬性`);
+                        return false;
+                    }
+                    
+                    // 驗證信號類型
+                    const validTypes = ['offer', 'answer', 'candidate'];
+                    if (!validTypes.includes(signal.type)) {
+                        this.log(`跳過無效信號 ${index + 1}: 未知類型 ${signal.type}`);
+                        return false;
+                    }
+                    
+                    return true;
+                });
+
+                this.log(`過濾後有效信號數量: ${validSignals.length}/${signals.length}`);
+
+                validSignals.forEach((signal, index) => {
+                    this.log(`處理信號 ${index + 1}/${validSignals.length}: ${signal.type}`);
+                    try {
+                        this.peer.signal(signal);
+                        this.log(`信號 ${signal.type} 處理成功`);
+                    } catch (error) {
+                        this.log(`信號 ${signal.type} 處理失敗: ${error.message}`);
+                    }
+                });
+            }
+
+            processSingleSignal(signal) {
+                if (!this.peer) {
+                    this.log('Peer未創建，無法處理信號');
+                    return;
+                }
+
+                this.log(`處理單個信號: ${signal.type}`);
+                try {
+                    this.peer.signal(signal);
+                    this.log(`信號 ${signal.type} 處理成功`);
+                } catch (error) {
+                    this.log(`信號 ${signal.type} 處理失敗: ${error.message}`);
+                }
+            }
+
+            sendMessage() {
+                if (this.connectionState !== 'connected') {
+                    this.log('連接未建立，無法發送訊息');
+                    return;
+                }
+
+                const input = document.getElementById('chatInput');
+                const message = input.value.trim();
+                
+                if (!message) return;
+
+                try {
+                    const chatMessage = {
+                        type: 'chat',
+                        text: message,
+                        timestamp: Date.now()
+                    };
+
+                    this.peer.send(JSON.stringify(chatMessage));
+                    this.addChatMessage(message, 'sent');
+                    this.log(`發送訊息: ${message}`);
+                    input.value = '';
+                } catch (error) {
+                    this.log(`發送失敗: ${error.message}`);
+                }
+            }
+
+            addChatMessage(text, type) {
+                const chatMessages = document.getElementById('chatMessages');
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message ${type}`;
+                
+                const timestamp = new Date().toLocaleTimeString();
+                messageDiv.innerHTML = `
+                    <div>${text}</div>
+                    <div class="message-time">${timestamp}</div>
+                `;
+                
+                chatMessages.appendChild(messageDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+
+            copyToClipboard(elementId) {
+                const element = document.getElementById(elementId);
+                element.select();
+                element.setSelectionRange(0, 99999);
+                
+                try {
+                    document.execCommand('copy');
+                    this.log('信號已複製到剪貼簿');
+                } catch (error) {
+                    this.log('複製失敗，請手動複製');
+                }
+            }
+
+            showHostSignalArea() {
+                this.hideAllSignalAreas();
+                document.getElementById('hostSignalArea').classList.remove('hidden');
+            }
+
+            showJoinSignalArea() {
+                this.hideAllSignalAreas();
+                document.getElementById('joinSignalArea').classList.remove('hidden');
+            }
+
+            showResponseSignalArea() {
+                this.hideAllSignalAreas();
+                document.getElementById('responseSignalArea').classList.remove('hidden');
+            }
+
+            showReceiveResponseArea() {
+                this.hideAllSignalAreas();
+                document.getElementById('receiveResponseArea').classList.remove('hidden');
+                this.log('房主：已顯示接收回應區域，請貼上加入者的回應信號');
+            }
+
+            showChatSection() {
+                document.getElementById('chatSection').classList.remove('hidden');
+            }
+
+            hideAllSignalAreas() {
+                const areas = [
+                    'hostSignalArea',
+                    'joinSignalArea', 
+                    'responseSignalArea',
+                    'receiveResponseArea'
+                ];
+                areas.forEach(id => {
+                    document.getElementById(id).classList.add('hidden');
+                });
+            }
+
+            reset() {
+                this.log('重置連接狀態');
+                
+                if (this.peer) {
+                    this.peer.destroy();
+                    this.peer = null;
+                }
+
+                this.isHost = false;
+                this.connectionState = 'disconnected';
+                this.answerProcessed = false;
+                this.offerProcessed = false;
+                this.pendingCandidates = [];
+                
+                // 清空所有輸入框
+                document.getElementById('hostSignal').value = '';
+                document.getElementById('joinSignal').value = '';
+                document.getElementById('responseSignal').value = '';
+                document.getElementById('receiveResponse').value = '';
+                document.getElementById('chatInput').value = '';
+                
+                // 隱藏所有區域
+                this.hideAllSignalAreas();
+                document.getElementById('chatSection').classList.add('hidden');
+                document.getElementById('statusArea').classList.add('hidden');
+                
+                // 清空聊天記錄
+                document.getElementById('chatMessages').innerHTML = `
+                    <div class="message received">
+                        <div>歡迎來到WebRTC聊天室！</div>
+                        <div class="message-time">系統訊息</div>
+                    </div>
+                `;
+                
+                this.log('重置完成');
+            }
+
+            updateSignalDisplay() {
+                if (!this.pendingCandidates || this.pendingCandidates.length === 0) return;
+                
+                // 過濾有效的ICE候選信號
+                const validCandidates = this.pendingCandidates.filter(candidate => {
+                    return candidate && candidate.type === 'candidate';
+                });
+                
+                if (validCandidates.length === 0) {
+                    this.log('沒有有效的ICE候選信號');
+                    this.pendingCandidates = [];
+                    return;
+                }
+                
+                if (this.isHost) {
+                    // 房主：更新offer信號顯示
+                    const hostSignal = document.getElementById('hostSignal').value;
+                    if (hostSignal) {
+                        try {
+                            // 如果已有offer信號，則添加ICE候選
+                            const offerData = JSON.parse(LZString.decompressFromBase64(hostSignal));
+                            if (offerData && offerData.type === 'offer') {
+                                const updatedSignals = [offerData, ...validCandidates];
+                                const updatedCompressed = LZString.compressToBase64(JSON.stringify(updatedSignals));
+                                document.getElementById('hostSignal').value = updatedCompressed;
+                                this.log(`房主信號已更新，包含 ${validCandidates.length} 個有效ICE候選`);
+                            } else {
+                                this.log('房主offer信號無效，無法更新');
+                            }
+                        } catch (error) {
+                            this.log(`房主信號更新失敗: ${error.message}`);
+                        }
+                    }
+                } else {
+                    // 加入者：更新answer信號顯示
+                    const responseSignal = document.getElementById('responseSignal').value;
+                    if (responseSignal) {
+                        try {
+                            // 如果已有answer信號，則添加ICE候選
+                            const answerData = JSON.parse(LZString.decompressFromBase64(responseSignal));
+                            if (answerData && answerData.type === 'answer') {
+                                const updatedSignals = [answerData, ...validCandidates];
+                                const updatedCompressed = LZString.compressToBase64(JSON.stringify(updatedSignals));
+                                document.getElementById('responseSignal').value = updatedCompressed;
+                                this.log(`加入者信號已更新，包含 ${validCandidates.length} 個有效ICE候選`);
+                            } else {
+                                this.log('加入者answer信號無效，無法更新');
+                            }
+                        } catch (error) {
+                            this.log(`加入者信號更新失敗: ${error.message}`);
+                        }
+                    }
+                }
+                
+                // 清空待發送列表，避免重複添加
+                this.pendingCandidates = [];
+            }
+        }
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            new WebRTCChatTest();
+        });
+    </script>
+</body>
+</html>

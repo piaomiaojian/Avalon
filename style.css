@@ -242,18 +242,65 @@ h1 {
     transition: width 0.3s ease;
 }
 .chat-area {
-    margin: 20px 0;
-    padding: 15px;
     background: rgba(255, 255, 255, 0.1);
     border-radius: 10px;
-    max-height: 200px;
+    padding: 15px;
+    margin-top: 20px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+.chat-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+}
+.chat-header h3 {
+    margin: 0;
+    color: #fff;
+    font-size: 16px;
+}
+.chat-messages {
+    height: 200px;
     overflow-y: auto;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+    padding: 10px;
+    margin-bottom: 10px;
+    font-size: 14px;
 }
 .chat-message {
-    margin: 5px 0;
+    margin-bottom: 8px;
     padding: 8px;
     background: rgba(255, 255, 255, 0.1);
-    border-radius: 5px;
+    border-radius: 6px;
+    color: #fff;
+}
+.chat-input-area {
+    display: flex;
+    gap: 10px;
+}
+.chat-input-area input {
+    flex: 1;
+    padding: 8px 12px;
+    border: none;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.9);
+    color: #333;
+    font-size: 14px;
+}
+.chat-input-area button {
+    padding: 8px 16px;
+    background: linear-gradient(135deg, #4CAF50, #45a049);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.3s ease;
+}
+.chat-input-area button:hover {
+    background: linear-gradient(135deg, #45a049, #4CAF50);
+    transform: translateY(-1px);
 }
 .error-container {
     margin-top: 20px;
@@ -362,15 +409,6 @@ h1 {
 
 .room-chat {
     margin: 30px 0;
-}
-
-.chat-messages {
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 10px;
-    padding: 15px;
-    height: 200px;
-    overflow-y: auto;
-    margin-bottom: 15px;
 }
 
 .chat-input {
@@ -615,4 +653,86 @@ h1 {
 
 .game-operation-area.hidden{
     display: none !important;
+}
+
+/* 連接日誌區域 */
+.connection-log-area {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 15px;
+    margin-top: 20px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.log-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.log-header h3 {
+    margin: 0;
+    color: #fff;
+    font-size: 16px;
+}
+
+.clear-log-btn {
+    padding: 4px 8px;
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.3s ease;
+}
+
+.clear-log-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.connection-log {
+    height: 150px;
+    overflow-y: auto;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 12px;
+    font-family: 'Courier New', monospace;
+}
+
+.log-entry {
+    margin-bottom: 4px;
+    padding: 2px 4px;
+    border-radius: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.log-entry.log-info {
+    color: #87CEEB;
+}
+
+.log-entry.log-success {
+    color: #90EE90;
+}
+
+.log-entry.log-warning {
+    color: #FFD700;
+}
+
+.log-entry.log-error {
+    color: #FFB6C1;
+}
+
+.log-time {
+    color: #888;
+    margin-right: 8px;
+}
+
+.log-message {
+    color: inherit;
 } 
