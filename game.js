@@ -1,5 +1,5 @@
 // ==================== 遊戲邏輯層 (Game Logic) ====================
-// 版本: 1.0.36
+// 版本: 1.0.38
 // 最後更新: 2024-12-19
 
 class AvalonGame {
@@ -193,6 +193,21 @@ class AvalonGame {
             missionSize: missionSize,
             leader: allPlayers[this.currentLeader].id
         });
+    }
+
+    // 添加房主玩家
+    addHostPlayer() {
+        const hostPlayer = {
+            id: this.transport.getCurrentPlayerId(),
+            name: '房主',
+            ready: true
+        };
+        
+        // 檢查房主是否已存在
+        if (!this.players.find(p => p.id === hostPlayer.id)) {
+            this.players.push(hostPlayer);
+            console.log('房主已添加到玩家列表:', hostPlayer);
+        }
     }
 
     // 處理玩家加入
@@ -423,6 +438,26 @@ class AvalonGame {
             isSupported: isSupported,
             supportedPlayerCounts: supportedPlayerCounts
         };
+    }
+
+    // 同步遊戲狀態（用於新玩家加入時）
+    syncGameState(gameState) {
+        if (gameState.players) {
+            this.players = gameState.players;
+        }
+        if (gameState.roles) {
+            this.roles = gameState.roles;
+        }
+        if (gameState.missionResults) {
+            this.missionResults = gameState.missionResults;
+        }
+        this.gameState = gameState.state || this.gameState;
+        this.currentMission = gameState.currentMission || this.currentMission;
+        this.currentLeader = gameState.currentLeader || this.currentLeader;
+        this.selectedMembers = gameState.selectedMembers || this.selectedMembers;
+        this.votes = gameState.votes || this.votes;
+        
+        console.log('遊戲狀態已同步:', this.getGameState());
     }
 
     // 重置遊戲
